@@ -1,7 +1,7 @@
 import { holeLabel, inBoard } from '../logic/geometry';
 import { createProject, parseProject } from '../model/project';
 import type { ChangeKind, Store, Tab } from '../model/store';
-import { cancel, deleteSelection, finishDraft, flipSelection, rotateSelection, setTool, TOOL_LABELS } from './actions';
+import { cancel, deleteSelection, flipSelection, rotateSelection, setTool, TOOL_LABELS } from './actions';
 import { renderBoardTab, renderBoardTabView } from './boardTab';
 import { renderCheckTab } from './checkTab';
 import { renderDesignTab, renderDesignViews, toggleOverlaySide } from './designTab';
@@ -200,8 +200,6 @@ export class App {
       case 'Backspace':
         e.preventDefault();
         return deleteSelection(s);
-      case 'Enter':
-        return finishDraft(s);
       case '0':
         return s.setUi({ camera: null }, 'view');
       case 'Tab':

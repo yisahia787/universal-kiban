@@ -4,7 +4,7 @@ import { makePart } from '../model/project';
 import { checkGroupPlacement, checkPlacement } from '../logic/placement';
 import type { Camera, Store } from '../model/store';
 import type { Hole, Part, Placement, Side } from '../model/types';
-import { constrain, finishDraft, netClick, placePart, resizedPart, toggleDisabledHole, wireClick } from '../ui/actions';
+import { constrain, netClick, placePart, resizedPart, toggleDisabledHole, wireClick } from '../ui/actions';
 import { keys } from '../ui/keys';
 import { marginP, renderBoard, renderDraft, renderHandles, renderPart, renderWire } from './render';
 
@@ -102,9 +102,6 @@ export class BoardView {
     svg.addEventListener('pointerup', (e) => this.onUp(e));
     svg.addEventListener('pointerleave', () => {
       if (!this.drag) this.store.setUi({ hover: null }, 'view');
-    });
-    svg.addEventListener('dblclick', () => {
-      if (this.mode === 'design') finishDraft(this.store);
     });
     svg.addEventListener('dragover', (e) => {
       if (this.mode !== 'design' || !dragFootprint || !e.dataTransfer?.types.includes(DND_TYPE)) return;

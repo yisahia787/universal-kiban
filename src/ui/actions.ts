@@ -107,9 +107,9 @@ export function cancel(store: Store): void {
 
 const toolKind = (tool: Tool): WireKind | null => (tool === 'bare' || tool === 'bridge' || tool === 'insulated' ? tool : null);
 
-/** 直交拘束（Shift を押していない場合、水平または垂直にそろえる） */
-export function constrain(from: Hole, to: Hole, free: boolean): Hole {
-  if (free) return to;
+/** 水平・垂直にそろえる（orthogonal が true のとき。Shift を押している間） */
+export function constrain(from: Hole, to: Hole, orthogonal: boolean): Hole {
+  if (!orthogonal) return to;
   const dx = Math.abs(to[0] - from[0]);
   const dy = Math.abs(to[1] - from[1]);
   return dx >= dy ? [to[0], from[1]] : [from[0], to[1]];
@@ -132,11 +132,15 @@ function addWire(store: Store, kind: WireKind, side: Side, points: Hole[]): void
   });
   store.setUi({ draft: null }, 'view');
   const n = store.analysis.wireHoles.get(wire.id)?.length ?? 0;
-  store.setMessage(`${TOOL_LABELS[kind]}を追加しました（導通する穴 ${n} 個）`);
+  store.setMessage(`${TOOL_LABELS[kind]}を追加しました（導通する穴 ${n} 個）。次のクリックで新しい配線を始めます`);
 }
 
-/** 配線ツールで穴をクリックしたとき */
-export function wireClick(store: Store, side: Side, hole: Hole, free: boolean): void {
+/**
+ * 配線ツールで穴をクリックしたとき。
+ * 1 回目のクリックで始点、2 回目のクリックで終点を決めて 1 本の配線を作る。
+ * 次のクリックは新しい配線の始点になる（終点から続けない）。
+ */
+export function wireClick(store: Store, side: Side, hole: Hole, orthogonal: boolean): void {
   const kind = toolKind(store.ui.tool);
   if (!kind) return;
   const b = store.project.board;
@@ -152,7 +156,7 @@ export function wireClick(store: Store, side: Side, hole: Hole, free: boolean): 
     store.setMessage(
       kind === 'bridge'
         ? '隣の穴をクリックするとブリッジを作ります'
-        : '折れ点の穴をクリック、終点でダブルクリックまたは Enter で確定（Shift で斜め、Esc で中止）',
+        : '終点の穴をクリックすると配線を作ります（斜めも可。Shift で水平・垂直にそろえる、Esc で中止）',
     );
     return;
   }
@@ -162,15 +166,10 @@ export function wireClick(store: Store, side: Side, hole: Hole, free: boolean): 
     else store.setUi({ draft: { ...d, points: [hole], cursor: hole } }, 'view');
     return;
   }
-  const next = constrain(last, hole, free);
-  if (next[0] === last[0] && next[1] === last[1]) return;
-  store.setUi({ draft: { ...d, points: [...d.points, next], cursor: next } }, 'view');
-}
-
-export function finishDraft(store: Store): void {
-  const d = store.ui.draft;
-  if (!d || d.kind === 'bridge') return;
-  addWire(store, d.kind, d.side, d.points);
+  const end = constrain(last, hole, orthogonal);
+  if (end[0] === last[0] && end[1] === last[1]) return;
+  if (!inBoard(b, end[0], end[1])) return;
+  addWire(store, kind, side, [last, end]);
 }
 
 export function netClick(store: Store, hole: Hole): void {

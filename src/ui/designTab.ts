@@ -195,7 +195,7 @@ function rightPanel(store: Store): HTMLElement {
     body += `<section class="props"><h3>操作のヒント</h3><ul class="hints">
       <li>左の手元の部品をクリックして穴をクリック（またはビューへドラッグ）して配置</li>
       <li>部品面ビューに置くと部品面、はんだ面ビューに置くとはんだ面に配置されます</li>
-      <li>配線ツールで穴をクリックして経路を指定、ダブルクリックか Enter で確定</li>
+      <li>配線ツールで始点の穴、終点の穴の順にクリックすると 1 本できます（斜めも可、Shift で水平・垂直）</li>
       <li>ホイールでズーム、スペース＋ドラッグ／右ドラッグでスクロール</li>
     </ul></section>`;
   }
