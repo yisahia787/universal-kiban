@@ -1,20 +1,9 @@
-import { FOOTPRINTS, defaultParams, getFootprint, type FootprintDef, type ParamSpec } from '../library/footprints';
-import { makePart } from '../model/project';
+import { renderFootprintIcon } from '../canvas/render';
+import { CATEGORIES, FOOTPRINTS, getFootprint, type FootprintDef, type ParamSpec } from '../library/footprints';
 import type { Store } from '../model/store';
 import type { Part, ParamValue } from '../model/types';
+import { toggleHand } from './actions';
 import { download, esc, html } from './dom';
-
-export function footprintOptions(selected: string): string {
-  const cats = [...new Set(FOOTPRINTS.map((f) => f.category))];
-  return cats
-    .map(
-      (c) =>
-        `<optgroup label="${esc(c)}">${FOOTPRINTS.filter((f) => f.category === c)
-          .map((f) => `<option value="${f.id}"${f.id === selected ? ' selected' : ''}>${esc(f.name)}</option>`)
-          .join('')}</optgroup>`,
-    )
-    .join('');
-}
 
 function paramField(spec: ParamSpec, value: ParamValue): string {
   const name = `param-${spec.key}`;
@@ -65,46 +54,6 @@ export function paramSummary(part: Part): string {
     .join(' / ');
 }
 
-/** 部品追加フォーム。追加した部品の ID を返す */
-export function createAddForm(store: Store, onAdded?: (ids: string[]) => void, compact = false): HTMLElement {
-  let fpId = 'resistor-axial';
-  const form = html<HTMLFormElement>(`<form class="add-form${compact ? ' compact' : ''}">
-    <label>部品の種類<select name="footprint">${footprintOptions(fpId)}</select></label>
-    <div class="params"></div>
-    <label>値<input type="text" name="value" placeholder="例: 10kΩ, 100nF, NE555"></label>
-    <label>数量<input type="number" name="qty" min="1" max="50" value="1"></label>
-    <button type="submit" class="primary">追加</button>
-  </form>`);
-  const paramsEl = form.querySelector<HTMLDivElement>('.params')!;
-  const drawParams = () => {
-    const def = getFootprint(fpId)!;
-    paramsEl.innerHTML = paramFields(def, defaultParams(def));
-  };
-  drawParams();
-  form.querySelector('select[name=footprint]')!.addEventListener('change', (e) => {
-    fpId = (e.target as HTMLSelectElement).value;
-    drawParams();
-  });
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const def = getFootprint(fpId)!;
-    const params = readParams(def, paramsEl);
-    const value = (form.elements.namedItem('value') as HTMLInputElement).value.trim();
-    const qty = Math.max(1, Math.min(50, Number((form.elements.namedItem('qty') as HTMLInputElement).value) || 1));
-    const ids: string[] = [];
-    store.update((p) => {
-      for (let i = 0; i < qty; i++) {
-        const part = makePart(p.parts, fpId, params, value);
-        p.parts.push(part);
-        ids.push(part.id);
-      }
-    });
-    store.setMessage(`${def.name} を ${qty} 個追加しました`);
-    onAdded?.(ids);
-  });
-  return form;
-}
-
 type SortKey = 'ref' | 'type';
 let filterText = '';
 let sortKey: SortKey = 'ref';
@@ -118,7 +67,7 @@ export function sortedParts(parts: Part[], key: SortKey = 'ref'): Part[] {
 }
 
 export function placementLabel(part: Part): string {
-  if (!part.placement) return '<span class="badge unplaced">未配置</span>';
+  if (!part.placement) return '';
   return part.placement.side === 'top' ? '<span class="badge top">部品面</span>' : '<span class="badge bottom">はんだ面</span>';
 }
 
@@ -141,22 +90,63 @@ export function bomCsv(parts: Part[]): string {
   return '﻿' + rows.join('\r\n') + '\r\n';
 }
 
+/** 部品カード（イメージ＋名前）。棚と手元で共通 */
+export function partCard(def: FootprintDef, opts: { inHand: boolean; count?: number; draggable?: boolean; active?: boolean }): string {
+  const title = opts.inHand ? 'クリックで棚に戻す' : 'クリックで手元に置く';
+  return `<button type="button" class="part-card${opts.inHand ? ' in-hand' : ''}${opts.active ? ' active' : ''}" data-fp="${def.id}" title="${title}"${opts.draggable ? ' draggable="true"' : ''}>
+    ${renderFootprintIcon(def.id)}
+    <span class="name">${esc(def.name)}</span>
+    ${opts.count ? `<span class="count" title="配置済みの数">${opts.count}</span>` : ''}
+  </button>`;
+}
+
+let category = CATEGORIES[0];
+
 export function renderPartsTab(store: Store, el: HTMLElement): void {
   el.innerHTML = '';
+  const hand = store.project.hand.map((id) => getFootprint(id)).filter((d): d is FootprintDef => !!d);
+  const counts = new Map<string, number>();
+  for (const p of store.project.parts) counts.set(p.footprint, (counts.get(p.footprint) ?? 0) + 1);
+  const shelf = FOOTPRINTS.filter((f) => (category === 'all' || f.category === category) && !store.project.hand.includes(f.id));
   const wrap = html(`<div class="parts-tab">
-    <section class="card"><h2>部品を追加</h2><div class="add-slot"></div></section>
-    <section class="card grow">
-      <div class="row-between"><h2>部品リスト（${store.project.parts.length} 個）</h2>
+    <div class="shelf-row">
+      <section class="card shelf">
+        <div class="row-between"><h2>部品棚</h2>
+          <select class="category" aria-label="カテゴリ">
+            ${CATEGORIES.map((c) => `<option value="${esc(c)}"${c === category ? ' selected' : ''}>${esc(c)}</option>`).join('')}
+            <option value="all"${category === 'all' ? ' selected' : ''}>すべて</option>
+          </select>
+        </div>
+        <p class="muted">使いそうな部品をクリックすると手元に置きます。</p>
+        <div class="cards">${shelf.map((d) => partCard(d, { inHand: false })).join('') || '<p class="empty">このカテゴリの部品はすべて手元にあります</p>'}</div>
+      </section>
+      <section class="card hand">
+        <div class="row-between"><h2>手元（${hand.length} 種類）</h2></div>
+        <p class="muted">手元の部品は設計画面の左に並び、何個でも配置できます。クリックすると棚に戻します。</p>
+        <div class="cards">${hand.map((d) => partCard(d, { inHand: true, count: counts.get(d.id) })).join('') || '<p class="empty">まだありません。左の棚から選んでください</p>'}</div>
+      </section>
+    </div>
+    <section class="card">
+      <div class="row-between"><h2>配置済みの部品（${store.project.parts.length} 個）</h2>
         <div class="tools">
           <input type="search" class="filter" placeholder="絞り込み" value="${esc(filterText)}">
           <select class="sort"><option value="ref"${sortKey === 'ref' ? ' selected' : ''}>Ref 順</option><option value="type"${sortKey === 'type' ? ' selected' : ''}>種類順</option></select>
           <button class="bom">部品表 CSV</button>
         </div>
       </div>
-      <table class="parts-table"><thead><tr><th>Ref</th><th>種類</th><th>仕様</th><th>値</th><th>メモ</th><th>配置</th><th></th></tr></thead><tbody></tbody></table>
+      <table class="parts-table"><thead><tr><th>Ref</th><th>種類</th><th>仕様</th><th>値</th><th>メモ</th><th>面</th><th></th></tr></thead><tbody></tbody></table>
     </section>
   </div>`);
-  wrap.querySelector('.add-slot')!.appendChild(createAddForm(store));
+  wrap.querySelectorAll('.cards').forEach((c) =>
+    c.addEventListener('click', (e) => {
+      const card = (e.target as HTMLElement).closest<HTMLElement>('.part-card');
+      if (card?.dataset.fp) toggleHand(store, card.dataset.fp);
+    }),
+  );
+  wrap.querySelector<HTMLSelectElement>('.category')!.addEventListener('change', (e) => {
+    category = (e.target as HTMLSelectElement).value;
+    renderPartsTab(store, el);
+  });
   const tbody = wrap.querySelector('tbody')!;
   const refs = new Map<string, number>();
   for (const p of store.project.parts) refs.set(p.ref, (refs.get(p.ref) ?? 0) + 1);
@@ -175,11 +165,11 @@ export function renderPartsTab(store: Store, el: HTMLElement): void {
       <td><input class="value" value="${esc(p.value)}"></td>
       <td><input class="note" value="${esc(p.note)}"></td>
       <td>${placementLabel(p)}</td>
-      <td><button class="danger small del" title="部品を削除">削除</button></td>
+      <td><button class="danger small del" title="部品を基板から取り除く">削除</button></td>
     </tr></tbody></table>`).querySelector('tr')!;
     tbody.appendChild(tr);
   }
-  if (!parts.length) tbody.innerHTML = `<tr><td colspan="7" class="empty">${store.project.parts.length ? '該当する部品がありません' : 'まだ部品がありません。左のフォームから追加してください'}</td></tr>`;
+  if (!parts.length) tbody.innerHTML = `<tr><td colspan="7" class="empty">${store.project.parts.length ? '該当する部品がありません' : 'まだ配置した部品はありません（③ 設計で手元の部品を配置します）'}</td></tr>`;
 
   tbody.addEventListener('change', (e) => {
     const t = e.target as HTMLInputElement;
@@ -202,7 +192,7 @@ export function renderPartsTab(store: Store, el: HTMLElement): void {
     if (!t.classList.contains('del')) return;
     const id = t.closest('tr')?.dataset.id;
     const part = store.project.parts.find((p) => p.id === id);
-    if (!part || !confirm(`${part.ref} を削除しますか？（配線は残ります）`)) return;
+    if (!part || !confirm(`${part.ref} を基板から取り除きますか？（配線は残ります）`)) return;
     store.update((p) => {
       p.parts = p.parts.filter((pp) => pp.id !== id);
     });

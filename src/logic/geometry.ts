@@ -43,6 +43,14 @@ export function localToTop(pl: Placement, lx: number, ly: number): [number, numb
   return [pl.x + (pl.side === 'bottom' ? -rx : rx), pl.y + ry];
 }
 
+/** 部品面から見た座標 → 部品ローカル座標（localToTop の逆） */
+export function topToLocal(pl: Placement, tx: number, ty: number): [number, number] {
+  let dx = tx - pl.x;
+  const dy = ty - pl.y;
+  if (pl.side === 'bottom') dx = -dx;
+  return rotate(dx, dy, ((360 - pl.rot) % 360) as Rotation);
+}
+
 export interface PlacedPin {
   partId: string;
   num: string;

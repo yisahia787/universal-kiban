@@ -36,7 +36,8 @@ export interface UiState {
   camera: Camera | null;
   /** ネット表示の基準となる穴 */
   netHole: Hole | null;
-  placing: { partId: string; rot: Rotation; side: Side | null; hole: Hole | null } | null;
+  /** 手元の部品を配置中（クリックするたびに 1 つ置く） */
+  placing: { footprint: string; rot: Rotation; side: Side | null; hole: Hole | null } | null;
   draft: { kind: WireKind; side: Side; points: Hole[]; cursor: Hole | null } | null;
   wireColor: string;
   message: { text: string; level: 'info' | 'error' } | null;
@@ -210,8 +211,5 @@ export class Store {
     const wires = new Set(this.project.wires.map((w) => w.id));
     this.ui.selParts = this.ui.selParts.filter((id) => placed.has(id));
     this.ui.selWires = this.ui.selWires.filter((id) => wires.has(id));
-    if (this.ui.placing && !this.project.parts.some((p) => p.id === this.ui.placing!.partId && !p.placement)) {
-      this.ui.placing = null;
-    }
   }
 }

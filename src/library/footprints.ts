@@ -44,6 +44,8 @@ export interface FootprintDef {
   name: string;
   category: string;
   refPrefix: string;
+  /** params.count を端のドラッグで変えられる（ピンは x 方向に並ぶ） */
+  resizable?: boolean;
   params: ParamSpec[];
   generate(params: Record<string, ParamValue>): FpGeometry;
 }
@@ -94,6 +96,48 @@ function radialCircle(span: number, diameterMm: number, names: [string, string])
     shape: { type: 'circle', cx, cy: 0, r },
   };
 }
+
+/** ピンヘッダ・ピンソケット（端をドラッグして長さを変えられる） */
+function headerDef(id: string, name: string): FootprintDef {
+  return {
+    id,
+    name,
+    category: 'コネクタ等',
+    refPrefix: 'J',
+    resizable: true,
+    params: [
+      {
+        key: 'rows',
+        label: '列数',
+        type: 'select',
+        options: [
+          { value: 1, label: '1 列' },
+          { value: 2, label: '2 列' },
+        ],
+        default: 1,
+      },
+      { key: 'count', label: '1 列のピン数', type: 'int', min: 1, max: 40, default: 4 },
+      { key: 'pinNames', label: 'ピン名（カンマ区切り）', type: 'text', default: '' },
+    ],
+    generate: (p) => {
+      const rows = num(p, 'rows', 1) === 2 ? 2 : 1;
+      const count = Math.max(1, Math.min(40, Math.round(num(p, 'count', 4))));
+      const names = pinNames(str(p, 'pinNames', ''), rows * count);
+      const pins: FpPin[] = [];
+      for (let i = 0; i < count; i++) {
+        for (let r = 0; r < rows; r++) {
+          const idx = i * rows + r;
+          pins.push({ num: String(idx + 1), name: names[idx], x: i, y: r });
+        }
+      }
+      const rect = { x0: -0.5, y0: -0.5, x1: count - 0.5, y1: rows - 0.5 };
+      return { pins, bounds: rect, shape: { type: 'rect', rect } };
+    },
+  };
+}
+
+export const RESIZE_MIN = 1;
+export const RESIZE_MAX = 40;
 
 export const FOOTPRINTS: FootprintDef[] = [
   {
@@ -304,40 +348,8 @@ export const FOOTPRINTS: FootprintDef[] = [
       };
     },
   },
-  {
-    id: 'pin-header',
-    name: 'ピンヘッダ',
-    category: 'コネクタ等',
-    refPrefix: 'J',
-    params: [
-      {
-        key: 'rows',
-        label: '列数',
-        type: 'select',
-        options: [
-          { value: 1, label: '1 列' },
-          { value: 2, label: '2 列' },
-        ],
-        default: 1,
-      },
-      { key: 'count', label: '1 列のピン数', type: 'int', min: 1, max: 40, default: 4 },
-      { key: 'pinNames', label: 'ピン名（カンマ区切り）', type: 'text', default: '' },
-    ],
-    generate: (p) => {
-      const rows = num(p, 'rows', 1) === 2 ? 2 : 1;
-      const count = Math.max(1, Math.min(40, Math.round(num(p, 'count', 4))));
-      const names = pinNames(str(p, 'pinNames', ''), rows * count);
-      const pins: FpPin[] = [];
-      for (let i = 0; i < count; i++) {
-        for (let r = 0; r < rows; r++) {
-          const idx = i * rows + r;
-          pins.push({ num: String(idx + 1), name: names[idx], x: i, y: r });
-        }
-      }
-      const rect = { x0: -0.5, y0: -0.5, x1: count - 0.5, y1: rows - 0.5 };
-      return { pins, bounds: rect, shape: { type: 'rect', rect } };
-    },
-  },
+  headerDef('pin-header', 'ピンヘッダ'),
+  headerDef('pin-socket', 'ピンソケット'),
   {
     id: 'terminal-block',
     name: '端子台',
@@ -403,6 +415,8 @@ export const FOOTPRINTS: FootprintDef[] = [
 ];
 
 const byId = new Map(FOOTPRINTS.map((f) => [f.id, f]));
+
+export const CATEGORIES = [...new Set(FOOTPRINTS.map((f) => f.category))];
 
 export function getFootprint(id: string): FootprintDef | undefined {
   return byId.get(id);

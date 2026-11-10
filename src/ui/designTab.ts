@@ -1,12 +1,12 @@
-import { BoardView, setDragPartId } from '../canvas/boardView';
-import { getFootprint } from '../library/footprints';
+import { BoardView, DND_TYPE, setDragFootprint } from '../canvas/boardView';
+import { getFootprint, type FootprintDef } from '../library/footprints';
 import { holeKey, holeLabel, partGeometry, pinsAt, polylineLength } from '../logic/geometry';
 import { checkPlacement } from '../logic/placement';
 import type { Layers, Store, Tool } from '../model/store';
 import type { Part, Rotation, Side } from '../model/types';
 import { deleteSelection, flipSelection, rotateSelection, setTool, startPlacing, TOOL_LABELS } from './actions';
 import { esc, html } from './dom';
-import { createAddForm, paramFields, placementLabel, readParams, sortedParts } from './partsTab';
+import { paramFields, partCard, placementLabel, readParams, sortedParts } from './partsTab';
 
 let views: BoardView[] = [];
 let viewsKey = '';
@@ -90,57 +90,57 @@ export function toggleOverlaySide(store: Store): void {
 }
 
 function leftPanel(store: Store): HTMLElement {
-  const parts = sortedParts(store.project.parts);
-  const unplaced = parts.filter((p) => !p.placement);
-  const placed = parts.filter((p) => p.placement);
+  const placed = sortedParts(store.project.parts.filter((p) => p.placement));
+  const counts = new Map<string, number>();
+  for (const p of placed) counts.set(p.footprint, (counts.get(p.footprint) ?? 0) + 1);
+  const hand = store.project.hand.map((id) => getFootprint(id)).filter((d): d is FootprintDef => !!d);
   const item = (p: Part) => {
     const fp = getFootprint(p.footprint);
-    const placing = store.ui.placing?.partId === p.id;
     const sel = store.ui.selParts.includes(p.id);
-    return `<li class="part-item${placing ? ' placing' : ''}${sel ? ' selected' : ''}" data-id="${esc(p.id)}"${p.placement ? '' : ' draggable="true"'} title="${p.placement ? 'クリックで選択' : 'ビューへドラッグ、またはクリックしてから穴をクリックで配置'}">
+    return `<li class="part-item${sel ? ' selected' : ''}" data-id="${esc(p.id)}" title="クリックで選択">
       <span class="ref">${esc(p.ref)}</span><span class="val">${esc(p.value || fp?.name || '')}</span>${placementLabel(p)}</li>`;
   };
   const panel = html(`<aside class="panel left">
-    <h3>未配置（${unplaced.length}）</h3>
-    <ul class="part-list">${unplaced.map(item).join('') || '<li class="empty">なし</li>'}</ul>
+    <div class="row-between"><h3>手元の部品</h3><button class="small goto-shelf" title="② 部品リストで手元の部品を選びます">部品棚</button></div>
+    <p class="muted hint">クリック→穴をクリックで配置（続けて置けます）。ビューへドラッグしても置けます。</p>
+    <div class="cards compact">${
+      hand.map((d) => partCard(d, { inHand: true, count: counts.get(d.id), draggable: true, active: store.ui.placing?.footprint === d.id })).join('') ||
+      '<p class="empty">手元に部品がありません。「部品棚」から選んでください</p>'
+    }</div>
     <h3>配置済み（${placed.length}）</h3>
     <ul class="part-list">${placed.map(item).join('') || '<li class="empty">なし</li>'}</ul>
-    <details class="add"><summary>＋ 部品を追加</summary><div class="add-slot"></div></details>
   </aside>`);
-  const details = panel.querySelector<HTMLDetailsElement>('details.add')!;
-  if (addOpen) details.open = true;
-  details.addEventListener('toggle', () => (addOpen = details.open));
-  panel.querySelector('.add-slot')!.appendChild(
-    createAddForm(store, (ids) => ids[0] && startPlacing(store, ids[0]), true),
-  );
   panel.addEventListener('click', (e) => {
-    const li = (e.target as HTMLElement).closest<HTMLLIElement>('.part-item');
-    if (!li) return;
-    const part = store.project.parts.find((p) => p.id === li.dataset.id);
-    if (!part) return;
-    if (!part.placement) {
-      if (store.ui.placing?.partId === part.id) store.setUi({ placing: null });
-      else startPlacing(store, part.id);
-    } else {
-      store.setUi({ selParts: [part.id], selWires: [], tool: 'select', placing: null });
-      const pins = pinsAt(part, part.placement).map((pin) => [pin.x, pin.y] as [number, number]);
-      views[0]?.focusHoles(pins);
+    const t = e.target as HTMLElement;
+    if (t.closest('.goto-shelf')) return store.setUi({ tab: 'parts', placing: null, draft: null });
+    const card = t.closest<HTMLElement>('.part-card');
+    if (card?.dataset.fp) {
+      if (store.ui.placing?.footprint === card.dataset.fp) {
+        store.setUi({ placing: null });
+        store.setMessage('');
+      } else startPlacing(store, card.dataset.fp);
+      return;
     }
+    const li = t.closest<HTMLLIElement>('.part-item');
+    const part = li && store.project.parts.find((p) => p.id === li.dataset.id);
+    if (!part?.placement) return;
+    store.setUi({ selParts: [part.id], selWires: [], tool: 'select', placing: null });
+    const pins = pinsAt(part, part.placement).map((pin) => [pin.x, pin.y] as [number, number]);
+    views[0]?.focusHoles(pins);
   });
   panel.addEventListener('dragstart', (e) => {
-    const li = (e.target as HTMLElement).closest<HTMLLIElement>('.part-item');
-    if (!li?.dataset.id || !e.dataTransfer) return;
-    e.dataTransfer.setData('application/x-ukb-part', li.dataset.id);
+    const card = (e.target as HTMLElement).closest<HTMLElement>('.part-card');
+    if (!card?.dataset.fp || !e.dataTransfer) return;
+    e.dataTransfer.setData(DND_TYPE, card.dataset.fp);
     e.dataTransfer.effectAllowed = 'copy';
-    setDragPartId(li.dataset.id);
+    setDragFootprint(card.dataset.fp);
   });
   panel.addEventListener('dragend', () => {
-    setDragPartId(null);
-    if (store.ui.placing && !store.project.parts.find((p) => p.id === store.ui.placing!.partId)?.placement) store.setUi({ placing: null });
+    setDragFootprint(null);
+    if (store.ui.placing) store.setUi({ placing: null });
   });
   return panel;
 }
-let addOpen = false;
 
 function partProps(store: Store, part: Part): string {
   const fp = getFootprint(part.footprint);
@@ -162,7 +162,7 @@ function partProps(store: Store, part: Part): string {
     <label>面<select name="side"><option value="top"${pl.side === 'top' ? ' selected' : ''}>部品面</option><option value="bottom"${pl.side === 'bottom' ? ' selected' : ''}>はんだ面</option></select></label>
     <label>回転<select name="rot">${[0, 90, 180, 270].map((r) => `<option value="${r}"${pl.rot === r ? ' selected' : ''}>${r}°</option>`).join('')}</select></label>
     <p class="muted">1 番ピン: ${holeLabel(pins[0].x, pins[0].y)}</p>
-    <div class="buttons"><button class="small rot">回転（R）</button><button class="small flip">反対面へ（F）</button><button class="small unplace">配置解除</button></div>
+    <div class="buttons"><button class="small rot">回転（R）</button><button class="small flip">反対面へ（F）</button><button class="small danger unplace">削除（Delete）</button></div>
     <table class="pins"><thead><tr><th>ピン</th><th>名前</th><th>穴</th><th>ネット</th></tr></thead><tbody>${pinRows}</tbody></table>
   </section>`;
 }
@@ -193,9 +193,9 @@ function rightPanel(store: Store): HTMLElement {
       <div class="buttons"><button class="small rot">回転（R）</button><button class="small flip">反対面へ（F）</button><button class="small danger del-sel">削除（Delete）</button></div></section>`;
   } else {
     body += `<section class="props"><h3>操作のヒント</h3><ul class="hints">
-      <li>左の一覧から部品をビューへドラッグ（またはクリック→穴をクリック）して配置</li>
+      <li>左の手元の部品をクリックして穴をクリック（またはビューへドラッグ）して配置</li>
       <li>部品面ビューに置くと部品面、はんだ面ビューに置くとはんだ面に配置されます</li>
-      <li>配線ツールで穴をクリックして経路を指定、ダブルクリックか Enter で確定</li>
+      <li>配線ツールで始点の穴、終点の穴の順にクリックすると 1 本できます（斜めも可、Shift で水平・垂直）</li>
       <li>ホイールでズーム、スペース＋ドラッグ／右ドラッグでスクロール</li>
     </ul></section>`;
   }
