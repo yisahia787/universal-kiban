@@ -1,8 +1,10 @@
-import { holeKey, inBoard, partGeometry, pinsAt, viewX } from '../logic/geometry';
+import { getFootprint, RESIZE_MAX, RESIZE_MIN } from '../library/footprints';
+import { holeKey, inBoard, localToTop, partGeometry, pinsAt, topToLocal, viewX } from '../logic/geometry';
+import { makePart } from '../model/project';
 import { checkGroupPlacement, checkPlacement } from '../logic/placement';
 import type { Camera, Store } from '../model/store';
-import type { Hole, Placement, Side } from '../model/types';
-import { constrain, finishDraft, netClick, placePart, toggleDisabledHole, wireClick } from '../ui/actions';
+import type { Hole, Part, Placement, Side } from '../model/types';
+import { constrain, finishDraft, netClick, placePart, resizedPart, toggleDisabledHole, wireClick } from '../ui/actions';
 import { keys } from '../ui/keys';
 import { marginP, renderBoard, renderDraft, renderHandles, renderPart, renderWire } from './render';
 
@@ -21,6 +23,7 @@ type Drag =
       moved: boolean;
     }
   | { type: 'vertex'; wireId: string; index: number; orig: Hole[] }
+  | { type: 'resize'; partId: string; end: 'start' | 'end'; orig: Part }
   | { type: 'band'; start: [number, number]; cur: [number, number]; additive: boolean };
 
 /** 1 つの面を表示・編集するビュー */
@@ -104,25 +107,23 @@ export class BoardView {
       if (this.mode === 'design') finishDraft(this.store);
     });
     svg.addEventListener('dragover', (e) => {
-      if (this.mode !== 'design' || !e.dataTransfer?.types.includes('application/x-ukb-part')) return;
+      if (this.mode !== 'design' || !dragFootprint || !e.dataTransfer?.types.includes(DND_TYPE)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
       const hole = this.holeAt(e);
       const pl = this.store.ui.placing;
-      if (!pl || pl.side !== this.side || pl.hole?.[0] !== hole[0] || pl.hole?.[1] !== hole[1]) {
-        const partId = pl?.partId ?? dragPartId;
-        if (partId) this.store.setUi({ placing: { partId, rot: pl?.rot ?? 0, side: this.side, hole } }, 'view');
+      if (!pl || pl.footprint !== dragFootprint || pl.side !== this.side || pl.hole?.[0] !== hole[0] || pl.hole?.[1] !== hole[1]) {
+        this.store.setUi({ placing: { footprint: dragFootprint, rot: pl?.rot ?? 0, side: this.side, hole } }, 'view');
       }
     });
     svg.addEventListener('drop', (e) => {
-      const id = e.dataTransfer?.getData('application/x-ukb-part');
-      if (!id) return;
+      const fp = e.dataTransfer?.getData(DND_TYPE);
+      if (!fp) return;
       e.preventDefault();
       const hole = this.holeAt(e);
       const rot = this.store.ui.placing?.rot ?? 0;
-      if (!placePart(this.store, id, { side: this.side, x: hole[0], y: hole[1], rot })) {
-        this.store.setUi({ placing: null });
-      }
+      this.store.setUi({ placing: null }, 'view');
+      placePart(this.store, fp, { side: this.side, x: hole[0], y: hole[1], rot });
     });
   }
 
@@ -153,7 +154,7 @@ export class BoardView {
     }
     if (store.ui.placing) {
       const pl = store.ui.placing;
-      placePart(store, pl.partId, { side: this.side, x: hole[0], y: hole[1], rot: pl.rot });
+      placePart(store, pl.footprint, { side: this.side, x: hole[0], y: hole[1], rot: pl.rot });
       return;
     }
     const tool = store.ui.tool;
@@ -168,6 +169,15 @@ export class BoardView {
 
     // 選択ツール
     const target = e.target as Element;
+    const rh = target.closest('[data-resize]');
+    if (rh) {
+      const part = store.project.parts.find((p) => p.id === rh.getAttribute('data-resize-part'));
+      if (part?.placement) {
+        store.begin();
+        this.drag = { type: 'resize', partId: part.id, end: rh.getAttribute('data-resize') as 'start' | 'end', orig: structuredClone(part) };
+        return;
+      }
+    }
     const handle = target.closest('[data-wire-handle]');
     if (handle) {
       const wireId = handle.getAttribute('data-wire-handle')!;
@@ -228,6 +238,22 @@ export class BoardView {
           if (o) w.points = o.map(([x, y]) => [x + dx, y + dy]);
         }
       });
+    } else if (d?.type === 'resize') {
+      const pl = d.orig.placement!;
+      const count0 = Number(d.orig.params.count) || 1;
+      const [lx] = topToLocal(pl, ...this.toTop(this.viewPoint(e)));
+      let next: Part;
+      if (d.end === 'end') {
+        const count = Math.max(RESIZE_MIN, Math.min(RESIZE_MAX, Math.round(lx) + 1));
+        next = resizedPart(d.orig, count, 0);
+      } else {
+        const shift = Math.max(count0 - RESIZE_MAX, Math.min(count0 - RESIZE_MIN, Math.round(lx)));
+        next = resizedPart(d.orig, count0 - shift, shift);
+      }
+      store.live((p) => {
+        const i = p.parts.findIndex((pp) => pp.id === d.partId);
+        if (i >= 0) p.parts[i] = next;
+      });
     } else if (d?.type === 'vertex') {
       store.live((p) => {
         const w = p.wires.find((ww) => ww.id === d.wireId);
@@ -270,6 +296,16 @@ export class BoardView {
       } else {
         store.commit();
         if (r.warnings.length) store.setMessage(r.warnings[0]);
+      }
+    } else if (d.type === 'resize') {
+      const part = store.project.parts.find((p) => p.id === d.partId);
+      const r = part?.placement ? checkPlacement(store.project, part, part.placement) : null;
+      if (!r?.ok) {
+        store.rollback();
+        if (r) store.setMessage(`長さを変えられません: ${r.errors[0]}`, 'error');
+      } else {
+        store.commit();
+        store.setMessage(`${part!.ref} のピン数: ${part!.params.count}`);
       }
     } else if (d.type === 'vertex') {
       const w = store.project.wires.find((ww) => ww.id === d.wireId);
@@ -374,6 +410,21 @@ export class BoardView {
         const wire = store.project.wires.find((ww) => ww.id === ui.selWires[0]);
         if (wire && wire.side === this.side) s += renderHandles(b, wire, this.side);
       }
+      // ピンヘッダ等の長さ変更ハンドル
+      if (ui.tool === 'select' && ui.selParts.length === 1 && ui.selWires.length === 0) {
+        const part = store.project.parts.find((p) => p.id === ui.selParts[0]);
+        const pl = part?.placement;
+        if (part && pl && pl.side === this.side && getFootprint(part.footprint)?.resizable) {
+          const count = Number(part.params.count) || 1;
+          const rows = Number(part.params.rows) === 2 ? 2 : 1;
+          const cy = (rows - 1) / 2;
+          for (const [end, lx] of [['start', -0.75], ['end', count - 0.25]] as const) {
+            const [tx, ty] = localToTop(pl, lx, cy);
+            const horiz = pl.rot === 0 || pl.rot === 180;
+            s += `<rect class="resize-handle${horiz ? ' h' : ' v'}" data-resize="${end}" data-resize-part="${part.id}" x="${viewX(b, this.side, tx) - 0.22}" y="${ty - 0.4}" width="0.44" height="0.8" rx="0.12" transform="rotate(${horiz ? 0 : 90} ${viewX(b, this.side, tx)} ${ty})"/>`;
+          }
+        }
+      }
       // ネットのハイライト
       if (net) {
         s += '<g class="net-holes">';
@@ -386,7 +437,7 @@ export class BoardView {
       // 配置中の部品（ゴースト）
       const pl = ui.placing;
       if (pl && pl.side === this.side && pl.hole) {
-        const part = store.project.parts.find((p) => p.id === pl.partId);
+        const part = getFootprint(pl.footprint) ? makePart(store.project.parts, pl.footprint) : null;
         if (part) {
           const placement: Placement = { side: this.side, x: pl.hole[0], y: pl.hole[1], rot: pl.rot };
           const r = checkPlacement(store.project, part, placement);
@@ -437,8 +488,9 @@ export class BoardView {
 }
 
 /** HTML5 ドラッグ中の部品 ID（dragover では dataTransfer の中身を読めないため） */
-export let dragPartId: string | null = null;
-export const setDragPartId = (id: string | null): void => {
-  dragPartId = id;
+export const DND_TYPE = 'application/x-ukb-footprint';
+export let dragFootprint: string | null = null;
+export const setDragFootprint = (id: string | null): void => {
+  dragFootprint = id;
 };
 

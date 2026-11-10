@@ -339,26 +339,90 @@ h3 small {
   display: flex;
 }
 
-/* ---------- ② 部品リスト ---------- */
+/* ---------- ② 部品リスト（棚と手元） ---------- */
 .parts-tab {
   display: flex;
+  flex-direction: column;
   gap: 14px;
   padding: 14px;
-  align-items: flex-start;
 }
-.parts-tab > .card:first-child {
-  width: 300px;
-  flex-shrink: 0;
+.shelf-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
-.add-form {
-  display: flex;
-  flex-direction: column;
+.shelf-row .card p.muted {
+  margin: 0 0 10px;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 8px;
 }
-.add-form .params {
+.cards .empty {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.part-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px 6px;
+  border-radius: 8px;
+  background: #fafbfc;
+  text-align: center;
+}
+.part-card:hover:not(:disabled) {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+}
+.part-card .fp-icon {
+  width: 100%;
+  height: 54px;
+}
+.part-card .name {
+  font-size: 12px;
+  line-height: 1.3;
+}
+.part-card.in-hand {
+  background: #fff;
+  border-color: #b9d3f5;
+}
+.part-card.active {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+.part-card .count {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 11px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 9px;
+  padding: 0 6px;
+}
+.part-card[draggable='true'] {
+  cursor: grab;
+}
+.cards.compact {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.cards.compact .fp-icon {
+  height: 40px;
+}
+.cards.compact .name {
+  font-size: 11px;
+}
+.fp-icon .part .pin {
+  stroke-width: 0.06;
+}
+.panel .hint {
+  margin: 0 0 8px;
 }
 .parts-table {
   width: 100%;
@@ -707,6 +771,11 @@ svg.placing {
   fill: #3c3f44;
   stroke: #1d1f22;
 }
+.part .body-pin-socket {
+  fill: #1f1f1f;
+  fill-opacity: 0.9;
+  stroke: #000;
+}
 .part .body-pin-header {
   fill: #2b2b2b;
   fill-opacity: 0.85;
@@ -754,6 +823,21 @@ svg.placing {
 }
 .part .pin1 {
   fill: #ffe082;
+}
+.fp-pin-header .pin {
+  fill: #e0b23a;
+  stroke: #8a6a14;
+}
+.fp-pin-header .pin1 {
+  fill: #ffd54f;
+  stroke: #fff;
+}
+.fp-pin-socket .pin {
+  fill: #050505;
+  stroke: #6b6b6b;
+}
+.fp-pin-socket .pin1 {
+  stroke: #ffd54f;
 }
 .part-label {
   font-size: 0.45px;
@@ -840,6 +924,15 @@ svg.placing {
   stroke-width: 0.5;
   cursor: pointer;
 }
+.resize-handle {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 0.06;
+  cursor: ew-resize;
+}
+.resize-handle.v {
+  cursor: ns-resize;
+}
 .handle {
   fill: #fff;
   stroke: var(--accent);
@@ -916,8 +1009,10 @@ svg.placing {
   .check-tab {
     flex-direction: column;
   }
+  .shelf-row {
+    grid-template-columns: 1fr;
+  }
   .board-tab .settings,
-  .parts-tab > .card:first-child,
   .check-tab > .card:first-child {
     width: 100%;
   }

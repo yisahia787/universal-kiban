@@ -1,4 +1,4 @@
-import type { BodyShape, FpGeometry } from '../library/footprints';
+import { defaultParams, generateFootprint, getFootprint, type BodyShape, type FpGeometry } from '../library/footprints';
 import type { Board, Hole, Part, Placement, Side, Wire } from '../model/types';
 import { colLabel, localToTop, viewX } from '../logic/geometry';
 
@@ -79,16 +79,18 @@ export interface PartRenderOpts {
   selected: boolean;
   state: 'ok' | 'warn' | 'bad';
   ghost?: boolean;
+  /** 部品棚のアイコン用（操作対象にしない） */
+  icon?: boolean;
   labels: boolean;
 }
 
 /** 部品の描画（本体 + ピン）。ラベルは読みやすいよう反転させずに別に描く */
 export function renderPart(b: Board, part: Part, pl: Placement, geo: FpGeometry, viewSide: Side, o: PartRenderOpts): string {
-  const classes = ['part', `state-${o.state}`];
+  const classes = ['part', `fp-${part.footprint}`, `state-${o.state}`];
   if (o.opposite) classes.push('opposite');
   if (o.selected) classes.push('selected');
   if (o.ghost) classes.push('ghost');
-  const data = o.opposite || o.ghost ? '' : ` data-part="${esc(part.id)}"`;
+  const data = o.opposite || o.ghost || o.icon ? '' : ` data-part="${esc(part.id)}"`;
   let s = `<g class="${classes.join(' ')}"${data}><g transform="${partTransform(b, pl, viewSide)}">`;
   s += shapeSvg(geo.shape, part.footprint);
   for (const p of geo.pins) {
@@ -152,4 +154,32 @@ export function renderDraft(b: Board, side: Side, points: Hole[], kind: Wire['ki
   const p = pts(b, side, points);
   const ends = points.map(([x, y]) => `<circle cx="${viewX(b, side, x)}" cy="${y}" r="0.15"/>`).join('');
   return `<g class="draft draft-${kind}"><polyline points="${p}" style="stroke:${esc(color)}"/>${ends}</g>`;
+}
+
+/** 部品棚・手元に並べるイメージ（既定パラメータの部品を部品面から見た図） */
+export function renderFootprintIcon(footprint: string): string {
+  const def = getFootprint(footprint);
+  const params = def ? defaultParams(def) : {};
+  const geo = generateFootprint(footprint, params);
+  const r = geo.bounds;
+  const pad = 0.35;
+  const x0 = Math.min(r.x0, ...geo.pins.map((p) => p.x - 0.3)) - pad;
+  const y0 = Math.min(r.y0, ...geo.pins.map((p) => p.y - 0.3), geo.plusPin ? -0.9 : 0) - pad;
+  const x1 = Math.max(r.x1, ...geo.pins.map((p) => p.x + 0.3)) + pad;
+  const y1 = Math.max(r.y1, ...geo.pins.map((p) => p.y + 0.3)) + pad;
+  // 小さい部品が大きく見えすぎないよう、最小の表示範囲をとる
+  const w = Math.max(x1 - x0, 4);
+  const h = Math.max(y1 - y0, 2.4);
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const board: Board = { cols: 1, rows: 1, pitchMm: 2.54, marginMm: 0, type: 'single', disabledHoles: [] };
+  const part: Part = { id: '', ref: '', footprint, params, value: '', note: '', placement: null };
+  const body = renderPart(board, part, { side: 'top', x: 0, y: 0, rot: 0 }, geo, 'top', {
+    opposite: false,
+    selected: false,
+    state: 'ok',
+    labels: false,
+    icon: true,
+  });
+  return `<svg class="fp-icon" viewBox="${f(cx - w / 2)} ${f(cy - h / 2)} ${f(w)} ${f(h)}" aria-hidden="true">${body}</svg>`;
 }

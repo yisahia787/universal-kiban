@@ -18,6 +18,7 @@ export function createProject(name = '新しいプロジェクト'): Project {
     version: 1,
     meta: { name, createdAt: now, updatedAt: now, note: '' },
     board: defaultBoard(),
+    hand: [],
     parts: [],
     wires: [],
     nets: [],
@@ -61,11 +62,17 @@ export function parseProject(text: string): Project {
   const base = createProject();
   const board: Board = { ...base.board, ...(raw.board ?? {}) };
   if (board.preset && !getPreset(board.preset)) delete board.preset;
+  const allParts: Part[] = Array.isArray(raw.parts) ? raw.parts : [];
+  // 手元: 保存されていなければ、部品に使われている種類から作る（旧形式の互換）
+  const handSrc: string[] = Array.isArray(raw.hand) ? raw.hand : allParts.map((p) => p.footprint);
+  const hand = [...new Set(handSrc)].filter((id) => getFootprint(id));
   return {
     ...base,
     meta: { ...base.meta, ...(raw.meta ?? {}) },
     board,
-    parts: Array.isArray(raw.parts) ? raw.parts : [],
+    hand,
+    // 旧形式の未配置部品は手元に移したので捨てる
+    parts: allParts.filter((p) => p.placement),
     wires: Array.isArray(raw.wires) ? raw.wires : [],
     nets: Array.isArray(raw.nets) ? raw.nets : [],
   };

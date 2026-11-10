@@ -1,9 +1,10 @@
 import { isAdjacent, wireUsable } from '../logic/conduction';
-import { holeKey, inBoard, nextRot } from '../logic/geometry';
+import { getFootprint } from '../library/footprints';
+import { holeKey, inBoard, localToTop, nextRot } from '../logic/geometry';
 import { checkGroupPlacement, checkPlacement } from '../logic/placement';
-import { DEFAULT_WIRE_COLORS, newId } from '../model/project';
+import { DEFAULT_WIRE_COLORS, makePart, newId } from '../model/project';
 import type { Store, Tool } from '../model/store';
-import type { Hole, Placement, Side, Wire, WireKind } from '../model/types';
+import type { Hole, Part, Placement, Side, Wire, WireKind } from '../model/types';
 
 export const TOOL_LABELS: Record<Tool, string> = {
   select: '選択・移動',
@@ -17,26 +18,45 @@ export function setTool(store: Store, tool: Tool): void {
   store.setUi({ tool, draft: null, placing: null });
 }
 
-export function placePart(store: Store, partId: string, pl: Placement): boolean {
-  const part = store.project.parts.find((p) => p.id === partId);
-  if (!part) return false;
+/** 手元の部品を 1 つ作って配置する */
+export function placePart(store: Store, footprint: string, pl: Placement): boolean {
+  if (!getFootprint(footprint)) return false;
+  const part = makePart(store.project.parts, footprint);
   const r = checkPlacement(store.project, part, pl);
   if (!r.ok) {
-    store.setMessage(r.errors[0], 'error');
+    store.setMessage(r.errors[0].replace(part.ref, getFootprint(footprint)!.name), 'error');
     return false;
   }
+  part.placement = pl;
   store.update((p) => {
-    p.parts.find((pp) => pp.id === partId)!.placement = pl;
+    p.parts.push(part);
   });
-  store.setUi({ placing: null, selParts: [partId], selWires: [], tool: 'select' });
-  store.setMessage(r.warnings[0] ?? `${part.ref} を配置しました`, 'info');
+  store.setUi({ selParts: [part.id], selWires: [], tool: 'select' });
+  store.setMessage(
+    (r.warnings[0] ? `${r.warnings[0]}。` : `${part.ref} を配置しました。`) + (store.ui.placing ? '続けて配置できます（Esc で終了）' : ''),
+  );
   return true;
 }
 
-export function startPlacing(store: Store, partId: string): void {
-  store.setUi({ placing: { partId, rot: 0, side: null, hole: null }, tool: 'select', draft: null });
-  const part = store.project.parts.find((p) => p.id === partId);
-  store.setMessage(`${part?.ref ?? ''} を置く穴をクリックしてください（R で回転、Esc で中止）`);
+export function startPlacing(store: Store, footprint: string): void {
+  store.setUi({ placing: { footprint, rot: 0, side: null, hole: null }, tool: 'select', draft: null });
+  store.setMessage(`${getFootprint(footprint)?.name ?? ''} を置く穴をクリックしてください（続けて何個でも置けます。R で回転、Esc で終了）`);
+}
+
+/** 手元と棚の間で部品の種類を移す */
+export function toggleHand(store: Store, footprint: string): void {
+  const inHand = store.project.hand.includes(footprint);
+  store.update((p) => {
+    p.hand = inHand ? p.hand.filter((id) => id !== footprint) : [...p.hand, footprint];
+  });
+  if (inHand && store.ui.placing?.footprint === footprint) store.setUi({ placing: null });
+}
+
+/** ピンヘッダ等の長さ（ピン数）と原点を変える */
+export function resizedPart(part: Part, count: number, shift: number): Part {
+  const pl = part.placement!;
+  const [x, y] = localToTop(pl, shift, 0);
+  return { ...part, params: { ...part.params, count }, placement: { ...pl, x: Math.round(x), y: Math.round(y) } };
 }
 
 function transformSelection(store: Store, fn: (pl: Placement) => Placement, verb: string): void {
@@ -71,7 +91,7 @@ export function deleteSelection(store: Store): void {
   const { selParts, selWires } = store.ui;
   if (!selParts.length && !selWires.length) return;
   store.update((p) => {
-    for (const part of p.parts) if (selParts.includes(part.id)) part.placement = null;
+    p.parts = p.parts.filter((part) => !selParts.includes(part.id));
     p.wires = p.wires.filter((w) => !selWires.includes(w.id));
   });
   store.setUi({ selParts: [], selWires: [] });

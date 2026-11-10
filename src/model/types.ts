@@ -35,6 +35,7 @@ export interface Part {
   params: Record<string, ParamValue>;
   value: string;
   note: string;
+  /** 旧形式との互換のため null を許すが、現在は常に配置済み */
   placement: Placement | null;
 }
 
@@ -65,6 +66,9 @@ export interface Project {
   version: 1;
   meta: ProjectMeta;
   board: Board;
+  /** 手元に置いた部品の種類（フットプリント ID）。個数は持たない */
+  hand: string[];
+  /** 配置した部品。配置するたびに 1 つ作られる */
   parts: Part[];
   wires: Wire[];
   nets: NamedNet[];
