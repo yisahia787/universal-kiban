@@ -50,7 +50,7 @@ export function makePart(parts: Part[], footprintId: string, params?: Part['para
 }
 
 export const DEFAULT_WIRE_COLORS: Record<Wire['kind'], string> = {
-  bare: '#b8bcc2',
+  bare: '#5f6873',
   bridge: '#8d939b',
   insulated: '#d33b3b',
 };

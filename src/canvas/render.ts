@@ -201,8 +201,9 @@ export function renderWire(b: Board, w: Wire, viewSide: Side, o: WireRenderOpts)
   if (o.netHighlight) classes.push('net-hl');
   let s = `<g class="${classes.join(' ')}"${o.opposite ? '' : ` data-wire="${esc(w.id)}"`}>`;
   if (o.selected || o.netHighlight) s += `<polyline class="halo" points="${p}"/>`;
-  if (w.kind === 'insulated') s += `<polyline class="outline" points="${p}"/>`;
-  s += `<polyline class="core" points="${p}" style="stroke:${esc(w.color)}"/>`;
+  if (w.kind !== 'bridge') s += `<polyline class="outline" points="${p}"/>`;
+  // 色を選べるのは被覆線だけ。すずめっき線・ブリッジは見やすい既定の色で描く
+  s += w.kind === 'insulated' ? `<polyline class="core" points="${p}" style="stroke:${esc(w.color)}"/>` : `<polyline class="core" points="${p}"/>`;
   if (!o.opposite && w.kind !== 'bridge') {
     for (const [x, y] of o.conducting) s += `<circle class="solder" cx="${viewX(b, viewSide, x)}" cy="${y}" r="0.17"/>`;
   }

@@ -523,7 +523,7 @@ export class BoardView {
       const d = ui.draft;
       if (d && d.side === this.side) {
         const pts = d.cursor && d.kind !== 'bridge' ? [...d.points, d.cursor] : d.points;
-        s += renderDraft(b, this.side, pts, d.kind, d.kind === 'insulated' ? ui.wireColor : '#9aa0a6');
+        s += renderDraft(b, this.side, pts, d.kind, d.kind === 'insulated' ? ui.wireColor : '#4b535d');
       }
     }
 

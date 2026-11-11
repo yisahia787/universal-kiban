@@ -486,7 +486,8 @@ h3 small {
 }
 .tool-bare .swatch {
   display: inline-block;
-  background: #a8adb4;
+  background: #a7afb8;
+  box-shadow: 0 0 0 1px #3d434b;
 }
 .tool-bridge .swatch {
   display: inline-block;
@@ -885,12 +886,24 @@ svg.placing {
   stroke: var(--ok);
   stroke-width: 0.12;
 }
+/* 反対面: 本体や配線は薄く、ピンの位置（穴を貫通しているリード）ははっきり表示する */
 .opposite-layer {
-  opacity: 0.32;
   pointer-events: none;
 }
-.opposite-layer .part-label {
+.opposite-layer .part > g > :not(.pin),
+.opposite-layer .wire {
+  opacity: 0.3;
+}
+.opposite-layer .part-label,
+.opposite-layer .pin-names {
+  opacity: 0.45;
   font-weight: normal;
+}
+.opposite-layer .part .pin {
+  fill: #3a3f46;
+  stroke: #15181b;
+  stroke-width: 0.05;
+  opacity: 0.9;
 }
 
 .wire polyline {
@@ -898,8 +911,13 @@ svg.placing {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.wire-bare .outline {
+  stroke: #3d434b;
+  stroke-width: 0.22;
+}
 .wire-bare .core {
-  stroke-width: 0.14;
+  stroke: #a7afb8;
+  stroke-width: 0.11;
 }
 .wire-insulated .outline {
   stroke: rgba(0, 0, 0, 0.45);
@@ -909,6 +927,7 @@ svg.placing {
   stroke-width: 0.24;
 }
 .wire-bridge .core {
+  stroke: #6d7580;
   stroke-width: 0.55;
   opacity: 0.95;
 }
@@ -925,9 +944,9 @@ svg.placing {
   stroke: var(--danger) !important;
 }
 .wire .solder {
-  fill: #d4d8dd;
-  stroke: #8b9097;
-  stroke-width: 0.04;
+  fill: #c3c9d0;
+  stroke: #3d434b;
+  stroke-width: 0.05;
 }
 .wire .hit {
   stroke: transparent;
