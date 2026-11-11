@@ -1,5 +1,6 @@
 import { BoardView, DND_TYPE, setDragFootprint } from '../canvas/boardView';
 import { getFootprint, type FootprintDef } from '../library/footprints';
+import { BAND_COLORS, COLOR_NAMES, GOLD, SILVER, parseResistance, resistorBands } from '../logic/colorCode';
 import { holeKey, holeLabel, partGeometry, pinsAt, polylineLength } from '../logic/geometry';
 import { checkPlacement } from '../logic/placement';
 import type { Layers, Store, Tool } from '../model/store';
@@ -142,6 +143,14 @@ function leftPanel(store: Store): HTMLElement {
   return panel;
 }
 
+function colorCodeText(value: string): string {
+  const ohms = parseResistance(value);
+  const bands = ohms ? resistorBands(ohms) : null;
+  if (!bands) return value ? 'カラーコード: 値を読み取れません（例: 10k, 4.7k, 330）' : 'カラーコード: 値を入れると表示します';
+  const name = (c: string) => (c === GOLD ? '金' : c === SILVER ? '銀' : COLOR_NAMES[BAND_COLORS.indexOf(c)]);
+  return `カラーコード: ${bands.map(name).join(' ')}`;
+}
+
 function partProps(store: Store, part: Part): string {
   const fp = getFootprint(part.footprint);
   const pl = part.placement!;
@@ -151,13 +160,14 @@ function partProps(store: Store, part: Part): string {
   const pinRows = pins
     .map((p) => {
       const net = a.nets.get(a.netOfHole.get(holeKey(p.x, p.y)) ?? '');
-      return `<tr><td>${esc(p.num)}</td><td>${esc(p.name)}</td><td>${holeLabel(p.x, p.y)}</td><td>${esc(net?.name ?? '')}</td></tr>`;
+      return `<tr><td>${esc(p.num)}</td><td><input class="pin-name" data-num="${esc(p.num)}" value="${esc(p.name)}" aria-label="ピン ${esc(p.num)} の名前"></td><td>${holeLabel(p.x, p.y)}</td><td>${esc(net?.name ?? '')}</td></tr>`;
     })
     .join('');
   return `<section class="props part-props" data-id="${esc(part.id)}">
     <h3>${esc(part.ref)} <small>${esc(fp?.name ?? part.footprint)}</small></h3>
     <label>Ref<input name="ref" value="${esc(part.ref)}"></label>
-    <label>値<input name="value" value="${esc(part.value)}"></label>
+    <label>値<input name="value" value="${esc(part.value)}"${part.footprint === 'resistor-axial' ? ' placeholder="例: 10k, 4.7k, 330, 4k7"' : ''}></label>
+    ${part.footprint === 'resistor-axial' ? `<p class="muted">${colorCodeText(part.value)}</p>` : ''}
     ${fp ? `<div class="params">${paramFields(fp, part.params)}</div>` : ''}
     <label>面<select name="side"><option value="top"${pl.side === 'top' ? ' selected' : ''}>部品面</option><option value="bottom"${pl.side === 'bottom' ? ' selected' : ''}>はんだ面</option></select></label>
     <label>回転<select name="rot">${[0, 90, 180, 270].map((r) => `<option value="${r}"${pl.rot === r ? ' selected' : ''}>${r}°</option>`).join('')}</select></label>
@@ -257,6 +267,19 @@ function bindRightPanel(store: Store, panel: HTMLElement): void {
 function onPartPropChange(store: Store, sec: HTMLElement, t: HTMLInputElement): void {
   const id = sec.dataset.id!;
   const part = store.project.parts.find((p) => p.id === id)!;
+  if (t.classList.contains('pin-name')) {
+    const num = t.dataset.num!;
+    const defName = partGeometry({ ...part, pinNames: undefined }).pins.find((p) => p.num === num)?.name ?? '';
+    const v = t.value.trim();
+    store.update((p) => {
+      const pp = p.parts.find((x) => x.id === id)!;
+      const names = { ...(pp.pinNames ?? {}) };
+      if (v === defName) delete names[num];
+      else names[num] = v;
+      pp.pinNames = Object.keys(names).length ? names : undefined;
+    });
+    return;
+  }
   if (t.name === 'ref' || t.name === 'value') {
     const v = t.value.trim();
     if (t.name === 'ref' && !v) return store.emit('panel');

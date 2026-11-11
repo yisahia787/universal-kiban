@@ -20,7 +20,7 @@ describe('footprints', () => {
       expect(g.pins.length).toBeGreaterThan(0);
       const ks = new Set(g.pins.map((p) => `${p.x},${p.y}`));
       expect(ks.size).toBe(g.pins.length);
-      expect(g.pins[0]).toMatchObject({ num: '1' });
+      expect(g.pins[0].num).toMatch(/(^|-)1$/);
     }
   });
   it('DIP-8 のピン配置（反時計回り）', () => {

@@ -14,6 +14,14 @@ export interface Board {
   marginMm: number;
   type: BoardType;
   disabledHoles: Hole[];
+  /** 取付穴。基板の左上の角（部品面から見て）からの位置 mm と直径 mm */
+  mountingHoles?: MountingHole[];
+}
+
+export interface MountingHole {
+  xMm: number;
+  yMm: number;
+  dMm: number;
 }
 
 export type Rotation = 0 | 90 | 180 | 270;
@@ -35,6 +43,8 @@ export interface Part {
   params: Record<string, ParamValue>;
   value: string;
   note: string;
+  /** ピン番号ごとにユーザーが付けたピン名（フットプリントの既定名より優先） */
+  pinNames?: Record<string, string>;
   /** 旧形式との互換のため null を許すが、現在は常に配置済み */
   placement: Placement | null;
 }

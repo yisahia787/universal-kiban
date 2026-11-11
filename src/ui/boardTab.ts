@@ -1,5 +1,5 @@
 import { BoardView } from '../canvas/boardView';
-import { PRESETS, getPreset } from '../library/presets';
+import { PRESETS, getPreset, holesBlockedByMounting } from '../library/presets';
 import { inBoard, pinsAt } from '../logic/geometry';
 import type { Store } from '../model/store';
 import type { Board, BoardType } from '../model/types';
@@ -42,9 +42,10 @@ export function renderBoardTab(store: Store, el: HTMLElement): void {
       <h2>基板の設定</h2>
       <label>プリセット<select name="preset">
         <option value="">カスタム</option>
-        ${PRESETS.map((p) => `<option value="${p.id}"${p.id === b.preset ? ' selected' : ''}>${esc(p.name)}（${p.cols}×${p.rows} 穴${p.provisional ? '・仮値' : ''}）</option>`).join('')}
+        ${PRESETS.map((p) => `<option value="${p.id}"${p.id === b.preset ? ' selected' : ''}>${esc(p.name)}（${p.cols}×${p.rows} 穴）</option>`).join('')}
       </select></label>
-      ${preset?.provisional ? `<p class="note warn">このプリセットの寸法・穴数は仮の値です。<a href="${esc(preset.url ?? '')}" target="_blank" rel="noopener">商品ページ</a>で確認してください。</p>` : ''}
+      ${preset ? `<p class="note">外形 ${preset.widthMm}×${preset.heightMm}mm・${preset.type === 'single' ? '片面' : '両面スルーホール'}・取付穴 φ${preset.mountingHoles[0]?.dMm ?? '-'}mm（取付穴に重なる穴は使用禁止にしています）。<a href="${esc(preset.url ?? '')}" target="_blank" rel="noopener">商品ページ</a></p>` : ''}
+      ${preset?.unverified ? `<p class="note warn">${esc(preset.unverified)}。実物と違う場合は穴数を直してください。</p>` : ''}
       <fieldset class="size-mode">
         <legend>サイズの指定方法</legend>
         <label class="inline"><input type="radio" name="mode" value="holes"${sizeMode === 'holes' ? ' checked' : ''}> 穴数</label>
@@ -101,7 +102,9 @@ export function renderBoardTab(store: Store, el: HTMLElement): void {
       });
       return;
     }
-    if (!applyBoard(store, { preset: p.id, cols: p.cols, rows: p.rows, type: p.type, marginMm: p.marginMm })) store.emit('panel');
+    const geo = { cols: p.cols, rows: p.rows, pitchMm: b.pitchMm, marginMm: p.marginMm };
+    if (!applyBoard(store, { preset: p.id, ...geo, type: p.type, mountingHoles: p.mountingHoles, disabledHoles: holesBlockedByMounting(geo, p.mountingHoles) }))
+      store.emit('panel');
   });
   q('.apply').addEventListener('click', () => {
     const margin = Math.max(0, Number(q<HTMLInputElement>('[name=margin]').value) || 0);
@@ -110,7 +113,7 @@ export function renderBoardTab(store: Store, el: HTMLElement): void {
         ? { cols: Number(q<HTMLInputElement>('[name=cols]').value), rows: Number(q<HTMLInputElement>('[name=rows]').value) }
         : updateComputed();
     const changed = size.cols !== b.cols || size.rows !== b.rows;
-    applyBoard(store, { ...size, marginMm: margin, ...(changed ? { preset: undefined } : {}) });
+    applyBoard(store, { ...size, marginMm: margin, ...(changed ? { preset: undefined, mountingHoles: [] } : {}) });
   });
   q<HTMLInputElement>('[name=margin]').addEventListener('change', (e) => {
     const v = Math.max(0, Number((e.target as HTMLInputElement).value) || 0);

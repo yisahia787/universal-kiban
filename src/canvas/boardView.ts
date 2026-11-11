@@ -4,9 +4,9 @@ import { makePart } from '../model/project';
 import { checkGroupPlacement, checkPlacement } from '../logic/placement';
 import type { Camera, Store } from '../model/store';
 import type { Hole, Part, Placement, Side } from '../model/types';
-import { constrain, netClick, placePart, resizedPart, toggleDisabledHole, wireClick } from '../ui/actions';
+import { cancel, constrain, netClick, placePart, resizedPart, toggleDisabledHole, wireClick } from '../ui/actions';
 import { keys } from '../ui/keys';
-import { marginP, renderBoard, renderDraft, renderHandles, renderPart, renderWire } from './render';
+import { esc, marginP, renderBoard, renderDraft, renderHandles, renderPart, renderWire } from './render';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 let uidCounter = 0;
@@ -149,6 +149,12 @@ export class BoardView {
       if (inBoard(b, hole[0], hole[1])) toggleDisabledHole(store, hole);
       return;
     }
+    // 基板の外をクリックしたら、配線中・配置中の操作を取りやめる
+    if (!inBoard(b, hole[0], hole[1]) && (store.ui.draft || store.ui.placing)) {
+      cancel(store);
+      store.setMessage('取りやめました');
+      return;
+    }
     if (store.ui.placing) {
       const pl = store.ui.placing;
       placePart(store, pl.footprint, { side: this.side, x: hole[0], y: hole[1], rot: pl.rot });
@@ -281,6 +287,7 @@ export class BoardView {
     if (d.type === 'move') {
       if (!d.moved) {
         store.rollback();
+        this.maybeEditPin(e);
         return;
       }
       const p = store.project;
@@ -319,6 +326,69 @@ export class BoardView {
     }
   }
 
+  /** ピンの位置をクリックしたら、ピン名の編集欄を開く（反対面の部品のピンも対象） */
+  private maybeEditPin(e: { clientX: number; clientY: number; viewPoint?: [number, number] }): void {
+    if (this.mode !== 'design' || this.store.ui.tool !== 'select') return;
+    const [tx, ty] = this.toTop(e.viewPoint ?? this.viewPoint(e));
+    const hole: Hole = [Math.round(tx), Math.round(ty)];
+    if (Math.hypot(tx - hole[0], ty - hole[1]) > 0.32) return;
+    const pin = this.store.analysis.pinsByHole.get(holeKey(hole[0], hole[1]))?.[0];
+    if (pin) this.openPinEditor(pin.partId, pin.num, hole);
+  }
+
+  openPinEditor(partId: string, num: string, hole: Hole): void {
+    const store = this.store;
+    const part = store.project.parts.find((p) => p.id === partId);
+    if (!part) return;
+    this.el.querySelector('.pin-editor')?.remove();
+    const defName = partGeometry({ ...part, pinNames: undefined }).pins.find((p) => p.num === num)?.name ?? '';
+    const current = part.pinNames?.[num] ?? defName;
+    const box = document.createElement('form');
+    box.className = 'pin-editor';
+    box.innerHTML = `<label>${esc(part.ref)}.${esc(num)} のピン名</label><input type="text" value="${esc(current)}" placeholder="${esc(defName || '名前なし')}">`;
+    // 穴の位置に表示
+    const b = store.project.board;
+    const ctm = this.svg.getScreenCTM();
+    const rect = this.el.getBoundingClientRect();
+    if (ctm) {
+      const pt = new DOMPoint(viewX(b, this.side, hole[0]) + 0.6, hole[1] - 0.6).matrixTransform(ctm);
+      box.style.left = `${Math.min(pt.x - rect.left, rect.width - 190)}px`;
+      box.style.top = `${Math.max(4, pt.y - rect.top - 30)}px`;
+    }
+    this.el.appendChild(box);
+    const input = box.querySelector('input')!;
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (save: boolean) => {
+      if (done) return;
+      done = true;
+      box.remove();
+      const v = input.value.trim();
+      if (!save || v === current) return;
+      store.update((p) => {
+        const pp = p.parts.find((x) => x.id === partId);
+        if (!pp) return;
+        const names = { ...(pp.pinNames ?? {}) };
+        if (v === defName) delete names[num];
+        else names[num] = v;
+        pp.pinNames = Object.keys(names).length ? names : undefined;
+      });
+      store.setMessage(`${part.ref}.${num} のピン名を「${v || '（なし）'}」にしました`);
+    };
+    box.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      finish(true);
+    });
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        ev.stopPropagation();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
+  }
+
   private finishBand(d: Extract<Drag, { type: 'band' }>): void {
     const store = this.store;
     const [ax, ay] = this.toTop(d.start);
@@ -329,6 +399,7 @@ export class BoardView {
     const y1 = Math.max(ay, by);
     if (x1 - x0 < 0.3 && y1 - y0 < 0.3) {
       store.emit('view');
+      this.maybeEditPin({ clientX: 0, clientY: 0, viewPoint: d.cur });
       return;
     }
     const inside = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
@@ -457,7 +528,26 @@ export class BoardView {
 
     // カーソル位置（両方のビューに表示）
     if (ui.hover && inBoard(b, ui.hover[0], ui.hover[1])) {
-      s += `<circle class="hover" cx="${viewX(b, this.side, ui.hover[0])}" cy="${ui.hover[1]}" r="0.45"/>`;
+      const hx = viewX(b, this.side, ui.hover[0]);
+      const hy = ui.hover[1];
+      s += `<circle class="hover" cx="${hx}" cy="${hy}" r="0.45"/>`;
+      // ピンの情報（どちらの面の部品でも表示する）
+      const pins = design && !this.drag ? a.pinsByHole.get(holeKey(ui.hover[0], ui.hover[1])) : undefined;
+      if (pins?.length) {
+        const lines = pins.map((p) => {
+          const part = store.project.parts.find((pp) => pp.id === p.partId);
+          const side = part?.placement?.side === this.side ? '' : '（反対面）';
+          return `${part?.ref ?? '?'}.${p.num}${p.name ? ` ${p.name}` : ''}${side}`;
+        });
+        const fs = 13 / cam.zoom;
+        const w = Math.max(...lines.map((l) => [...l].reduce((n, c) => n + (c.charCodeAt(0) > 255 ? 1 : 0.6), 0))) * fs + fs;
+        const h = lines.length * fs * 1.35 + fs * 0.5;
+        const x = hx + 0.55;
+        const y = hy - 0.55 - h;
+        s += `<g class="pin-tip"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${fs * 0.3}"/>${lines
+          .map((l, i) => `<text x="${x + fs * 0.5}" y="${y + fs * (1.15 + i * 1.35)}" style="font-size:${fs}px">${esc(l)}</text>`)
+          .join('')}</g>`;
+      }
     }
     // 範囲選択の枠
     if (this.drag?.type === 'band') {

@@ -6,6 +6,8 @@ export interface FpPin {
   name: string;
   x: number;
   y: number;
+  /** ピン名を常に表示する場合の向き（部品ローカルの x 方向。1 = 右、-1 = 左） */
+  labelDir?: 1 | -1;
 }
 
 /** 外形の矩形（穴中心が整数座標になる単位系、ピッチ単位） */
@@ -21,7 +23,13 @@ export type BodyShape =
   | { type: 'axial'; rect: Rect; band?: 'end' }
   | { type: 'circle'; cx: number; cy: number; r: number; flat?: boolean }
   | { type: 'to92'; rect: Rect }
-  | { type: 'to220'; rect: Rect };
+  | { type: 'to220'; rect: Rect }
+  /** XH コネクタ（外形 + 内側の壁） */
+  | { type: 'xh'; rect: Rect; wall: number }
+  /** 点線の外形（上に載るモジュールなど） */
+  | { type: 'outline'; rect: Rect }
+  | { type: 'text'; x: number; y: number; text: string }
+  | { type: 'multi'; shapes: BodyShape[] };
 
 export interface FpGeometry {
   pins: FpPin[];
@@ -33,6 +41,9 @@ export interface FpGeometry {
   /** 極性表示（＋ を表示するピン番号） */
   plusPin?: string;
 }
+
+/** mm → ピッチ単位 */
+const mm = (v: number): number => v / 2.54;
 
 export type ParamSpec =
   | { key: string; label: string; type: 'int'; min: number; max: number; step?: number; default: number }
@@ -398,6 +409,56 @@ export const FOOTPRINTS: FootprintDef[] = [
           ['1', '2'],
           ['3', '4'],
         ],
+      };
+    },
+  },
+  {
+    id: 'xh',
+    name: 'XH コネクタ（ポスト・トップ）',
+    category: 'コネクタ等',
+    refPrefix: 'CN',
+    params: [{ key: 'count', label: '極数', type: 'int', min: 2, max: 16, default: 2 }],
+    generate: (p) => {
+      // JST B*B-XH-A: ピッチ 2.5mm、幅 B = (n-1)×2.5 + 4.9mm、奥行 5.75mm（ピン中心から 2.35mm / 3.4mm）
+      // ユニバーサル基板の 2.54mm グリッドに合わせてピンを置き、外形は実寸で描く
+      const n = Math.max(2, Math.min(16, Math.round(num(p, 'count', 2))));
+      const pins = Array.from({ length: n }, (_, i) => ({ num: String(i + 1), name: '', x: i, y: 0 }));
+      const cx = (n - 1) / 2;
+      const halfW = mm(((n - 1) * 2.5 + 4.9) / 2);
+      const rect = { x0: cx - halfW, y0: -mm(2.35), x1: cx + halfW, y1: mm(3.4) };
+      return { pins, bounds: rect, shape: { type: 'xh', rect, wall: mm(0.8) } };
+    },
+  },
+  {
+    id: 'esp32-devkitc',
+    name: 'ESP32-DevKitC 用ピンソケット（19ピン×2）',
+    category: 'マイコンボード用',
+    refPrefix: 'U',
+    params: [],
+    generate: () => {
+      // Espressif ESP32-DevKitC V4（ESP32-WROOM-32E）の J2 / J3。列の間隔 25.4mm（10 ピッチ）
+      const j2 = ['3V3', 'EN', 'VP', 'VN', 'IO34', 'IO35', 'IO32', 'IO33', 'IO25', 'IO26', 'IO27', 'IO14', 'IO12', 'GND', 'IO13', 'D2', 'D3', 'CMD', '5V'];
+      const j3 = ['GND', 'IO23', 'IO22', 'TX', 'RX', 'IO21', 'GND', 'IO19', 'IO18', 'IO5', 'IO17', 'IO16', 'IO4', 'IO0', 'IO2', 'IO15', 'D1', 'D0', 'CLK'];
+      const pins: FpPin[] = [
+        ...j2.map((name, i) => ({ num: `J2-${i + 1}`, name, x: 0, y: i, labelDir: 1 as const })),
+        ...j3.map((name, i) => ({ num: `J3-${i + 1}`, name, x: 10, y: i, labelDir: -1 as const })),
+      ];
+      // ボード外形 約 54.4×27.9mm（ピンヘッダに対する前後位置は目安）
+      const board = { x0: 5 - mm(27.9 / 2), y0: -mm(6.3), x1: 5 + mm(27.9 / 2), y1: -mm(6.3) + mm(54.4) };
+      const sock = (x: number) => ({ type: 'rect' as const, rect: { x0: x - 0.5, y0: -0.5, x1: x + 0.5, y1: 18.5 } });
+      return {
+        pins,
+        bounds: board,
+        shape: {
+          type: 'multi',
+          shapes: [
+            { type: 'outline', rect: board },
+            sock(0),
+            sock(10),
+            { type: 'text', x: 5, y: -1.4, text: 'アンテナ側' },
+            { type: 'text', x: 5, y: 19.6, text: 'USB 側' },
+          ],
+        },
       };
     },
   },

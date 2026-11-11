@@ -59,3 +59,30 @@ describe('ピンヘッダ・ピンソケットの長さ変更', () => {
     expect(pins.at(-1)).toMatchObject({ x: lastBefore!.x, y: lastBefore!.y });
   });
 });
+
+describe('XH コネクタ', () => {
+  it('外形は実寸（幅 (n-1)×2.5+4.9mm、奥行 5.75mm）', () => {
+    const g = generateFootprint('xh', { count: 4 });
+    expect(g.pins).toHaveLength(4);
+    expect((g.bounds.x1 - g.bounds.x0) * 2.54).toBeCloseTo(12.4);
+    expect((g.bounds.y1 - g.bounds.y0) * 2.54).toBeCloseTo(5.75);
+  });
+});
+
+describe('ESP32-DevKitC 用ソケット', () => {
+  it('19 ピン×2 列、列の間隔 10 ピッチ、ピン名つき', () => {
+    const g = generateFootprint('esp32-devkitc', {});
+    expect(g.pins).toHaveLength(38);
+    const at = (n: string) => g.pins.find((p) => p.num === n)!;
+    expect(at('J2-1')).toMatchObject({ name: '3V3', x: 0, y: 0 });
+    expect(at('J2-19')).toMatchObject({ name: '5V', x: 0, y: 18 });
+    expect(at('J3-1')).toMatchObject({ name: 'GND', x: 10, y: 0 });
+    expect(at('J3-19')).toMatchObject({ name: 'CLK', x: 10, y: 18 });
+  });
+  it('ピン名を部品ごとに変更できる', () => {
+    const u = makePart([], 'esp32-devkitc');
+    u.placement = { side: 'top', x: 0, y: 0, rot: 0 };
+    u.pinNames = { 'J2-3': 'SENSOR' };
+    expect(pinsAt(u, u.placement).find((p) => p.num === 'J2-3')!.name).toBe('SENSOR');
+  });
+});

@@ -1,5 +1,5 @@
 import { defaultParams, getFootprint } from '../library/footprints';
-import { getPreset, PRESETS } from '../library/presets';
+import { getPreset, holesBlockedByMounting, PRESETS } from '../library/presets';
 import type { Board, Part, Project, Wire } from './types';
 
 export function newId(prefix: string): string {
@@ -8,7 +8,8 @@ export function newId(prefix: string): string {
 
 export function defaultBoard(): Board {
   const p = PRESETS[0];
-  return { preset: p.id, cols: p.cols, rows: p.rows, pitchMm: 2.54, marginMm: p.marginMm, type: p.type, disabledHoles: [] };
+  const b = { cols: p.cols, rows: p.rows, pitchMm: 2.54, marginMm: p.marginMm };
+  return { preset: p.id, ...b, type: p.type, mountingHoles: p.mountingHoles, disabledHoles: holesBlockedByMounting(b, p.mountingHoles) };
 }
 
 export function createProject(name = '新しいプロジェクト'): Project {

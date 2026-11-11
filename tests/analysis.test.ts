@@ -95,3 +95,15 @@ describe('analyze nets', () => {
     expect(a.issues.some((i) => i.severity === 'error' && i.message.includes('VCC'))).toBe(true);
   });
 });
+
+describe('プリセット', () => {
+  it('P-03229 は取付穴に重なる穴を使用禁止にする', async () => {
+    const { defaultBoard } = await import('../src/model/project');
+    const b = defaultBoard();
+    expect(b.mountingHoles).toHaveLength(4);
+    const keys = b.disabledHoles.map((h) => h.join(','));
+    expect(keys).toContain('0,0');
+    expect(keys).toContain('27,17');
+    expect(keys).not.toContain('5,5');
+  });
+});

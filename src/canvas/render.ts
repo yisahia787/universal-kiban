@@ -1,5 +1,6 @@
 import { defaultParams, generateFootprint, getFootprint, type BodyShape, type FpGeometry } from '../library/footprints';
 import type { Board, Hole, Part, Placement, Side, Wire } from '../model/types';
+import { parseResistance, resistorBands } from '../logic/colorCode';
 import { colLabel, localToTop, viewX } from '../logic/geometry';
 
 export const esc = (s: string): string =>
@@ -19,6 +20,11 @@ export function renderBoard(b: Board, side: Side, uid: string, coords: boolean):
   let s = `<defs><pattern id="hp-${uid}" x="-0.5" y="-0.5" width="1" height="1" patternUnits="userSpaceOnUse">${pat}</pattern></defs>`;
   s += `<rect class="board board-${side}" x="${f(-m)}" y="${f(-m)}" width="${f(b.cols - 1 + 2 * m)}" height="${f(b.rows - 1 + 2 * m)}" rx="0.3"/>`;
   s += `<rect x="-0.5" y="-0.5" width="${b.cols}" height="${b.rows}" fill="url(#hp-${uid})"/>`;
+  for (const mh of b.mountingHoles ?? []) {
+    const cx = mh.xMm / b.pitchMm - m;
+    const vx = side === 'top' ? cx : b.cols - 1 - cx;
+    s += `<circle class="mounting-hole" cx="${f(vx)}" cy="${f(mh.yMm / b.pitchMm - m)}" r="${f(mh.dMm / 2 / b.pitchMm)}"/>`;
+  }
   for (const [x, y] of b.disabledHoles) {
     const vx = viewX(b, side, x);
     s += `<g class="disabled-hole"><path d="M${f(vx - 0.3)} ${f(y - 0.3)}L${f(vx + 0.3)} ${f(y + 0.3)}M${f(vx + 0.3)} ${f(y - 0.3)}L${f(vx - 0.3)} ${f(y + 0.3)}"/></g>`;
@@ -71,7 +77,39 @@ function shapeSvg(shape: BodyShape, footprint: string): string {
       const r = shape.rect;
       return `<rect class="${cls}" x="${f(r.x0)}" y="${f(r.y0)}" width="${f(r.x1 - r.x0)}" height="${f(r.y1 - r.y0)}"/><rect class="tab" x="${f(r.x0)}" y="${f(r.y0)}" width="${f(r.x1 - r.x0)}" height="0.35"/>`;
     }
+    case 'xh': {
+      const r = shape.rect;
+      const w = shape.wall;
+      // 外形（実寸）と内側の壁。ロック用の切り欠きはピン中心から 3.4mm 側
+      return `<rect class="${cls}" x="${f(r.x0)}" y="${f(r.y0)}" width="${f(r.x1 - r.x0)}" height="${f(r.y1 - r.y0)}" rx="0.04"/>
+        <rect class="xh-inner" x="${f(r.x0 + w)}" y="${f(r.y0 + w)}" width="${f(r.x1 - r.x0 - 2 * w)}" height="${f(r.y1 - r.y0 - 2 * w)}"/>
+        <rect class="xh-slot" x="${f(r.x0 + w * 2)}" y="${f(r.y1 - w)}" width="${f(w * 1.6)}" height="${f(w)}"/>
+        <rect class="xh-slot" x="${f(r.x1 - w * 3.6)}" y="${f(r.y1 - w)}" width="${f(w * 1.6)}" height="${f(w)}"/>`;
+    }
+    case 'outline': {
+      const r = shape.rect;
+      return `<rect class="outline" x="${f(r.x0)}" y="${f(r.y0)}" width="${f(r.x1 - r.x0)}" height="${f(r.y1 - r.y0)}" rx="0.15"/>`;
+    }
+    case 'text':
+      return `<text class="fp-text" x="${f(shape.x)}" y="${f(shape.y)}">${esc(shape.text)}</text>`;
+    case 'multi':
+      return shape.shapes.map((sh) => shapeSvg(sh, footprint)).join('');
   }
+}
+
+/** 抵抗のカラーコードの帯（値から決める） */
+function resistorBandsSvg(shape: BodyShape, value: string): string {
+  if (shape.type !== 'axial') return '';
+  const ohms = parseResistance(value);
+  const bands = ohms ? resistorBands(ohms) : null;
+  if (!bands) return '';
+  const r = shape.rect;
+  const w = r.x1 - r.x0;
+  const bw = w * 0.085;
+  const xs = bands.length === 4 ? [0.17, 0.31, 0.45, 0.8] : [0.14, 0.26, 0.38, 0.5, 0.8];
+  return bands
+    .map((c, i) => `<rect class="cband" x="${f(r.x0 + w * xs[i] - bw / 2)}" y="${f(r.y0 + 0.02)}" width="${f(bw)}" height="${f(r.y1 - r.y0 - 0.04)}" style="fill:${c}"/>`)
+    .join('');
 }
 
 export interface PartRenderOpts {
@@ -93,8 +131,9 @@ export function renderPart(b: Board, part: Part, pl: Placement, geo: FpGeometry,
   const data = o.opposite || o.ghost || o.icon ? '' : ` data-part="${esc(part.id)}"`;
   let s = `<g class="${classes.join(' ')}"${data}><g transform="${partTransform(b, pl, viewSide)}">`;
   s += shapeSvg(geo.shape, part.footprint);
+  if (part.footprint === 'resistor-axial') s += resistorBandsSvg(geo.shape, part.value);
   for (const p of geo.pins) {
-    s += p.num === '1'
+    s += p.num === '1' || p.num.endsWith('-1')
       ? `<rect class="pin pin1" x="${f(p.x - 0.2)}" y="${f(p.y - 0.2)}" width="0.4" height="0.4"/>`
       : `<circle class="pin" cx="${f(p.x)}" cy="${f(p.y)}" r="0.2"/>`;
   }
@@ -103,12 +142,39 @@ export function renderPart(b: Board, part: Part, pl: Placement, geo: FpGeometry,
     if (pp) s += `<g class="plus" transform="translate(${f(pp.x)} ${f(pp.y - 0.62)}) rotate(${-pl.rot})"><path d="M-0.18 0H0.18M0 -0.18V0.18"/></g>`;
   }
   s += '</g>';
+  // 常に表示するピン名（ESP32 用ソケットなど）。読めるよう反転させずに描く
+  if (!o.icon && geo.pins.some((p) => p.labelDir)) {
+    s += '<g class="pin-names">';
+    for (const p of geo.pins) {
+      if (!p.labelDir) continue;
+      const name = part.pinNames?.[p.num] ?? p.name;
+      if (!name) continue;
+      const [px, py] = localToTop(pl, p.x, p.y);
+      const [lx, ly] = localToTop(pl, p.x + p.labelDir * 0.42, p.y);
+      const vpx = viewX(b, viewSide, px);
+      const vlx = viewX(b, viewSide, lx);
+      const anchor = vlx - vpx > 0.1 ? 'start' : vlx - vpx < -0.1 ? 'end' : 'middle';
+      const dy = anchor === 'middle' ? (ly > py ? 0.45 : -0.25) : 0.13;
+      s += `<text x="${f(vlx)}" y="${f(ly + dy)}" text-anchor="${anchor}">${esc(name)}</text>`;
+    }
+    s += '</g>';
+  }
   if (o.labels && !o.ghost) {
     const r = geo.bounds;
     const [cx, cy] = localToTop(pl, (r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2);
-    const vx = viewX(b, viewSide, cx);
+    let vx = viewX(b, viewSide, cx);
+    let vy = cy + 0.15;
+    let anchor = '';
+    // アキシャル部品（抵抗のカラーコードなど）は本体を隠さないよう、ラベルを本体の外に出す
+    if (geo.shape.type === 'axial') {
+      if (pl.rot === 0 || pl.rot === 180) vy -= 0.75;
+      else {
+        vx += 0.6;
+        anchor = ' text-anchor="start"';
+      }
+    }
     const text = part.value ? `${part.ref} ${part.value}` : part.ref;
-    s += `<text class="part-label" x="${f(vx)}" y="${f(cy + 0.15)}">${esc(text)}</text>`;
+    s += `<text class="part-label" x="${f(vx)}" y="${f(vy)}"${anchor}>${esc(text)}</text>`;
   }
   s += '</g>';
   return s;
