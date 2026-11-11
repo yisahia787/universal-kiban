@@ -29,6 +29,8 @@ export type BodyShape =
   /** 点線の外形（上に載るモジュールなど） */
   | { type: 'outline'; rect: Rect }
   | { type: 'text'; x: number; y: number; text: string }
+  /** 押しボタン（タクトスイッチの中央） */
+  | { type: 'button'; cx: number; cy: number; r: number }
   | { type: 'multi'; shapes: BodyShape[] };
 
 export interface FpGeometry {
@@ -147,8 +149,11 @@ function headerDef(id: string, name: string): FootprintDef {
   };
 }
 
-export const RESIZE_MIN = 1;
-export const RESIZE_MAX = 40;
+/** 端のドラッグで変えられるピン数の範囲（params.count の最小・最大） */
+export function resizeRange(def: FootprintDef): [number, number] {
+  const spec = def.params.find((p) => p.key === 'count');
+  return spec && spec.type === 'int' ? [spec.min, spec.max] : [1, 40];
+}
 
 export const FOOTPRINTS: FootprintDef[] = [
   {
@@ -404,7 +409,8 @@ export const FOOTPRINTS: FootprintDef[] = [
           { num: '4', name: '', x: 3, y: 2 },
         ],
         bounds: rect,
-        shape: { type: 'rect', rect },
+        // 本体の中央に丸いボタン（直径 約 3.5mm）
+        shape: { type: 'multi', shapes: [{ type: 'rect', rect }, { type: 'button', cx: 1.5, cy: 1, r: 3.5 / 2 / 2.54 }] },
         internal: [
           ['1', '2'],
           ['3', '4'],
@@ -417,6 +423,7 @@ export const FOOTPRINTS: FootprintDef[] = [
     name: 'XH コネクタ（ポスト・トップ）',
     category: 'コネクタ等',
     refPrefix: 'CN',
+    resizable: true,
     params: [{ key: 'count', label: '極数', type: 'int', min: 2, max: 16, default: 2 }],
     generate: (p) => {
       // JST B*B-XH-A: ピッチ 2.5mm、幅 B = (n-1)×2.5 + 4.9mm、奥行 5.75mm（ピン中心から 2.35mm / 3.4mm）

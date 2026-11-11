@@ -44,14 +44,45 @@ export function renderDesignViews(): void {
   for (const v of views) v.render();
 }
 
+/** 被覆線の色（よく使う 8 色） */
+const WIRE_COLORS: [string, string][] = [
+  ['#d33b3b', '赤'],
+  ['#222222', '黒'],
+  ['#1e5bc6', '青'],
+  ['#2e8b3e', '緑'],
+  ['#f2c200', '黄'],
+  ['#f57c00', '橙'],
+  ['#f5f5f5', '白'],
+  ['#7b3fa0', '紫'],
+];
+
+/**
+ * 被覆線の色を選ぶ。選択中の被覆線があればその色を変え、
+ * なければ被覆線ツールに切り替えて、次に引く被覆線の色にする。
+ */
+function pickWireColor(store: Store, color: string): void {
+  const selected = store.project.wires.filter((w) => store.ui.selWires.includes(w.id) && w.kind === 'insulated');
+  if (store.ui.tool === 'select' && selected.length) {
+    store.update((p) => {
+      for (const w of p.wires) if (selected.some((s) => s.id === w.id)) w.color = color;
+    });
+    store.setUi({ wireColor: color });
+    return;
+  }
+  store.setUi({ wireColor: color, tool: 'insulated', placing: null, draft: store.ui.draft?.kind === 'insulated' ? store.ui.draft : null });
+}
+
 function toolbar(store: Store): HTMLElement {
   const ui = store.ui;
-  const tb = html(`<div class="toolbar">
+  const tb = html(`<div class="toolbar" style="--wire-color:${esc(ui.wireColor)}">
     <div class="group tools">
       ${(Object.keys(TOOL_LABELS) as Tool[])
         .map((t) => `<button data-tool="${t}" class="tool tool-${t}${ui.tool === t ? ' active' : ''}" title="${TOOL_LABELS[t]}（${TOOL_KEYS[t]}）"><span class="swatch"></span>${TOOL_LABELS[t]}</button>`)
         .join('')}
-      <label class="inline color" title="被覆線の色"><input type="color" name="wireColor" value="${esc(ui.wireColor)}"></label>
+    </div>
+    <div class="group wire-colors" role="group" aria-label="被覆線の色">
+      ${WIRE_COLORS.map(([c, n]) => `<button class="color-swatch${ui.wireColor.toLowerCase() === c ? ' active' : ''}" data-color="${c}" title="被覆線：${n}" aria-label="被覆線 ${n}" style="--c:${c}"></button>`).join('')}
+      <label class="inline color" title="被覆線：その他の色"><input type="color" name="wireColor" value="${esc(ui.wireColor)}"></label>
     </div>
     <div class="group">
       <label class="inline">表示<select name="layout">
@@ -70,11 +101,12 @@ function toolbar(store: Store): HTMLElement {
     const btn = (e.target as HTMLElement).closest('button');
     if (!btn) return;
     if (btn.dataset.tool) setTool(store, btn.dataset.tool as Tool);
+    else if (btn.dataset.color) pickWireColor(store, btn.dataset.color);
     else if (btn.classList.contains('fit')) store.setUi({ camera: null }, 'view');
     else if (btn.classList.contains('switch-side')) toggleOverlaySide(store);
   });
-  tb.querySelector<HTMLInputElement>('[name=wireColor]')!.addEventListener('input', (e) => {
-    store.setUi({ wireColor: (e.target as HTMLInputElement).value }, 'view');
+  tb.querySelector<HTMLInputElement>('[name=wireColor]')!.addEventListener('change', (e) => {
+    pickWireColor(store, (e.target as HTMLInputElement).value);
   });
   tb.querySelector<HTMLSelectElement>('[name=layout]')!.addEventListener('change', (e) => {
     store.setUi({ layout: (e.target as HTMLSelectElement).value as Store['ui']['layout'], camera: null });

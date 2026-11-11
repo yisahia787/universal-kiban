@@ -2,6 +2,7 @@ import { isAdjacent, wireUsable } from '../logic/conduction';
 import { getFootprint } from '../library/footprints';
 import { holeKey, inBoard, localToTop, nextRot } from '../logic/geometry';
 import { checkGroupPlacement, checkPlacement } from '../logic/placement';
+import { eraseOverlap } from '../logic/wireEdit';
 import { DEFAULT_WIRE_COLORS, makePart, newId } from '../model/project';
 import type { Store, Tool } from '../model/store';
 import type { Hole, Part, Placement, Side, Wire, WireKind } from '../model/types';
@@ -123,6 +124,16 @@ function addWire(store: Store, kind: WireKind, side: Side, points: Hole[]): void
   }
   if (clean.length < 2) {
     store.setUi({ draft: null }, 'view');
+    return;
+  }
+  // 同じ種類の配線に完全に重ねたときは、重なった部分を削除する
+  const erased = eraseOverlap(store.project.wires, { kind, side, points: clean }, () => newId('w'));
+  if (erased) {
+    store.update((p) => {
+      p.wires = erased;
+    });
+    store.setUi({ draft: null, selWires: [] }, 'view');
+    store.setMessage(`${TOOL_LABELS[kind]}の重なった部分を削除しました`);
     return;
   }
   const color = kind === 'insulated' ? store.ui.wireColor : DEFAULT_WIRE_COLORS[kind];

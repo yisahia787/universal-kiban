@@ -486,7 +486,8 @@ h3 small {
 }
 .tool-bare .swatch {
   display: inline-block;
-  background: #a8adb4;
+  background: #a7afb8;
+  box-shadow: 0 0 0 1px #3d434b;
 }
 .tool-bridge .swatch {
   display: inline-block;
@@ -496,8 +497,28 @@ h3 small {
 }
 .tool-insulated .swatch {
   display: inline-block;
-  background: #d33b3b;
+  background: var(--wire-color, #d33b3b);
   height: 5px;
+}
+.wire-colors {
+  gap: 3px !important;
+}
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #9aa1a9;
+}
+.color-swatch:hover:not(:disabled) {
+  background: var(--c);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.color-swatch.active {
+  box-shadow: 0 0 0 2px var(--accent);
+  transform: scale(1.12);
 }
 .toolbar .color input {
   width: 32px;
@@ -794,9 +815,19 @@ svg.placing {
   fill: #2e86de;
   fill-opacity: 0.85;
 }
+.part .btn-ring {
+  fill: #3c4046;
+  stroke: #24272b;
+  stroke-width: 0.04;
+}
+.part .btn {
+  fill: #1c1e21;
+  stroke: #6b7078;
+  stroke-width: 0.05;
+}
 .part .body-tact-switch {
-  fill: #5d6168;
-  fill-opacity: 0.85;
+  fill: #a3a8af;
+  stroke: #5d6168;
 }
 .part .body-trimmer {
   fill: #3d7dd8;
@@ -885,12 +916,24 @@ svg.placing {
   stroke: var(--ok);
   stroke-width: 0.12;
 }
+/* 反対面: 本体や配線は薄く、ピンの位置（穴を貫通しているリード）ははっきり表示する */
 .opposite-layer {
-  opacity: 0.32;
   pointer-events: none;
 }
-.opposite-layer .part-label {
+.opposite-layer .part > g > :not(.pin),
+.opposite-layer .wire {
+  opacity: 0.3;
+}
+.opposite-layer .part-label,
+.opposite-layer .pin-names {
+  opacity: 0.45;
   font-weight: normal;
+}
+.opposite-layer .part .pin {
+  fill: #3a3f46;
+  stroke: #15181b;
+  stroke-width: 0.05;
+  opacity: 0.9;
 }
 
 .wire polyline {
@@ -898,8 +941,13 @@ svg.placing {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.wire-bare .outline {
+  stroke: #3d434b;
+  stroke-width: 0.22;
+}
 .wire-bare .core {
-  stroke-width: 0.14;
+  stroke: #a7afb8;
+  stroke-width: 0.11;
 }
 .wire-insulated .outline {
   stroke: rgba(0, 0, 0, 0.45);
@@ -909,6 +957,7 @@ svg.placing {
   stroke-width: 0.24;
 }
 .wire-bridge .core {
+  stroke: #6d7580;
   stroke-width: 0.55;
   opacity: 0.95;
 }
@@ -925,9 +974,9 @@ svg.placing {
   stroke: var(--danger) !important;
 }
 .wire .solder {
-  fill: #d4d8dd;
-  stroke: #8b9097;
-  stroke-width: 0.04;
+  fill: #c3c9d0;
+  stroke: #3d434b;
+  stroke-width: 0.05;
 }
 .wire .hit {
   stroke: transparent;

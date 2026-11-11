@@ -86,3 +86,20 @@ describe('ESP32-DevKitC 用ソケット', () => {
     expect(pinsAt(u, u.placement).find((p) => p.num === 'J2-3')!.name).toBe('SENSOR');
   });
 });
+
+describe('XH コネクタの長さ変更', () => {
+  it('ドラッグで変えられる範囲は極数の範囲（2〜16）', async () => {
+    const { getFootprint, resizeRange } = await import('../src/library/footprints');
+    expect(getFootprint('xh')!.resizable).toBe(true);
+    expect(resizeRange(getFootprint('xh')!)).toEqual([2, 16]);
+    expect(resizeRange(getFootprint('pin-header')!)).toEqual([1, 40]);
+  });
+  it('極数を変えると外形も実寸で伸びる', () => {
+    const cn = makePart([], 'xh');
+    cn.placement = { side: 'top', x: 3, y: 3, rot: 0 };
+    const r = resizedPart(cn, 5, 0);
+    const g = generateFootprint('xh', r.params);
+    expect(g.pins).toHaveLength(5);
+    expect((g.bounds.x1 - g.bounds.x0) * 2.54).toBeCloseTo(14.9);
+  });
+});

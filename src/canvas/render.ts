@@ -92,6 +92,8 @@ function shapeSvg(shape: BodyShape, footprint: string): string {
       const r = shape.rect;
       return `<rect class="outline" x="${f(r.x0)}" y="${f(r.y0)}" width="${f(r.x1 - r.x0)}" height="${f(r.y1 - r.y0)}" rx="0.15"/>`;
     }
+    case 'button':
+      return `<circle class="btn-ring" cx="${f(shape.cx)}" cy="${f(shape.cy)}" r="${f(shape.r * 1.18)}"/><circle class="btn" cx="${f(shape.cx)}" cy="${f(shape.cy)}" r="${f(shape.r)}"/>`;
     case 'text':
       return `<text class="fp-text" x="${f(shape.x)}" y="${f(shape.y)}">${esc(shape.text)}</text>`;
     case 'multi':
@@ -201,8 +203,9 @@ export function renderWire(b: Board, w: Wire, viewSide: Side, o: WireRenderOpts)
   if (o.netHighlight) classes.push('net-hl');
   let s = `<g class="${classes.join(' ')}"${o.opposite ? '' : ` data-wire="${esc(w.id)}"`}>`;
   if (o.selected || o.netHighlight) s += `<polyline class="halo" points="${p}"/>`;
-  if (w.kind === 'insulated') s += `<polyline class="outline" points="${p}"/>`;
-  s += `<polyline class="core" points="${p}" style="stroke:${esc(w.color)}"/>`;
+  if (w.kind !== 'bridge') s += `<polyline class="outline" points="${p}"/>`;
+  // 色を選べるのは被覆線だけ。すずめっき線・ブリッジは見やすい既定の色で描く
+  s += w.kind === 'insulated' ? `<polyline class="core" points="${p}" style="stroke:${esc(w.color)}"/>` : `<polyline class="core" points="${p}"/>`;
   if (!o.opposite && w.kind !== 'bridge') {
     for (const [x, y] of o.conducting) s += `<circle class="solder" cx="${viewX(b, viewSide, x)}" cy="${y}" r="0.17"/>`;
   }
