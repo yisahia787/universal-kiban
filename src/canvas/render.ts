@@ -9,21 +9,23 @@ export const esc = (s: string): string =>
 const f = (n: number): string => (Math.round(n * 1000) / 1000).toString();
 
 export const marginP = (b: Board): number => b.marginMm / b.pitchMm;
+export const marginYP = (b: Board): number => (b.marginYMm ?? b.marginMm) / b.pitchMm;
 
 /** 基板・穴・座標ラベル */
 export function renderBoard(b: Board, side: Side, uid: string, coords: boolean): string {
   const m = marginP(b);
+  const my = marginYP(b);
   const hasLand = side === 'bottom' || b.type === 'double';
   const pat = hasLand
     ? `<circle cx="0.5" cy="0.5" r="0.34" class="land"/><circle cx="0.5" cy="0.5" r="0.15" class="hole"/>`
     : `<circle cx="0.5" cy="0.5" r="0.17" class="hole-ring"/><circle cx="0.5" cy="0.5" r="0.15" class="hole"/>`;
   let s = `<defs><pattern id="hp-${uid}" x="-0.5" y="-0.5" width="1" height="1" patternUnits="userSpaceOnUse">${pat}</pattern></defs>`;
-  s += `<rect class="board board-${side}" x="${f(-m)}" y="${f(-m)}" width="${f(b.cols - 1 + 2 * m)}" height="${f(b.rows - 1 + 2 * m)}" rx="0.3"/>`;
+  s += `<rect class="board board-${side}" x="${f(-m)}" y="${f(-my)}" width="${f(b.cols - 1 + 2 * m)}" height="${f(b.rows - 1 + 2 * my)}" rx="0.3"/>`;
   s += `<rect x="-0.5" y="-0.5" width="${b.cols}" height="${b.rows}" fill="url(#hp-${uid})"/>`;
   for (const mh of b.mountingHoles ?? []) {
     const cx = mh.xMm / b.pitchMm - m;
     const vx = side === 'top' ? cx : b.cols - 1 - cx;
-    s += `<circle class="mounting-hole" cx="${f(vx)}" cy="${f(mh.yMm / b.pitchMm - m)}" r="${f(mh.dMm / 2 / b.pitchMm)}"/>`;
+    s += `<circle class="mounting-hole" cx="${f(vx)}" cy="${f(mh.yMm / b.pitchMm - my)}" r="${f(mh.dMm / 2 / b.pitchMm)}"/>`;
   }
   for (const [x, y] of b.disabledHoles) {
     const vx = viewX(b, side, x);
@@ -31,11 +33,11 @@ export function renderBoard(b: Board, side: Side, uid: string, coords: boolean):
   }
   if (coords) {
     s += '<g class="coord-label">';
-    for (let x = 0; x < b.cols; x++) s += `<text x="${viewX(b, side, x)}" y="${f(-m - 0.45)}">${colLabel(x)}</text>`;
+    for (let x = 0; x < b.cols; x++) s += `<text x="${viewX(b, side, x)}" y="${f(-my - 0.45)}">${colLabel(x)}</text>`;
     for (let y = 0; y < b.rows; y++) s += `<text x="${f(-m - 0.6)}" y="${f(y + 0.17)}" text-anchor="end">${y + 1}</text>`;
     s += '</g>';
   }
-  s += `<text class="side-label" x="${f(b.cols - 1 + m)}" y="${f(b.rows - 1 + m + 0.9)}" text-anchor="end">${side === 'top' ? '部品面（表）から見た図' : 'はんだ面（裏）から見た図・左右反転'}</text>`;
+  s += `<text class="side-label" x="${f(b.cols - 1 + m)}" y="${f(b.rows - 1 + my + 0.9)}" text-anchor="end">${side === 'top' ? '部品面（表）から見た図' : 'はんだ面（裏）から見た図・左右反転'}</text>`;
   return s;
 }
 

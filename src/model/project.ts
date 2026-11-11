@@ -8,7 +8,7 @@ export function newId(prefix: string): string {
 
 export function defaultBoard(): Board {
   const p = PRESETS[0];
-  const b = { cols: p.cols, rows: p.rows, pitchMm: 2.54, marginMm: p.marginMm };
+  const b = { cols: p.cols, rows: p.rows, pitchMm: 2.54, marginMm: p.marginMm, marginYMm: p.marginYMm };
   return { preset: p.id, ...b, type: p.type, mountingHoles: p.mountingHoles, disabledHoles: holesBlockedByMounting(b, p.mountingHoles) };
 }
 

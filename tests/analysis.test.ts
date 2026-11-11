@@ -97,13 +97,20 @@ describe('analyze nets', () => {
 });
 
 describe('プリセット', () => {
-  it('P-03229 は取付穴に重なる穴を使用禁止にする', async () => {
+  it('P-03229 は 25×15 穴で、穴の格子が 72×47mm の中央にある', async () => {
     const { defaultBoard } = await import('../src/model/project');
     const b = defaultBoard();
+    expect([b.cols, b.rows]).toEqual([25, 15]);
+    expect(b.cols * b.rows).toBe(375);
+    expect((b.cols - 1) * b.pitchMm + 2 * b.marginMm).toBeCloseTo(72, 1);
+    expect((b.rows - 1) * b.pitchMm + 2 * (b.marginYMm ?? b.marginMm)).toBeCloseTo(47, 1);
     expect(b.mountingHoles).toHaveLength(4);
-    const keys = b.disabledHoles.map((h) => h.join(','));
-    expect(keys).toContain('0,0');
-    expect(keys).toContain('27,17');
-    expect(keys).not.toContain('5,5');
+    // 取付穴（各辺から 3mm）は穴の格子の外にあるので、使用禁止の穴はない
+    expect(b.disabledHoles).toEqual([]);
+  });
+  it('取付穴に重なる穴は使用禁止にする', async () => {
+    const { holesBlockedByMounting } = await import('../src/library/presets');
+    const blocked = holesBlockedByMounting({ cols: 10, rows: 10, pitchMm: 2.54, marginMm: 2 }, [{ xMm: 3, yMm: 3, dMm: 3.2 }]);
+    expect(blocked.map((h) => h.join(','))).toContain('0,0');
   });
 });

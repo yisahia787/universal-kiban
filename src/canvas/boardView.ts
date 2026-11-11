@@ -6,7 +6,7 @@ import type { Camera, Store } from '../model/store';
 import type { Hole, Part, Placement, Side } from '../model/types';
 import { cancel, constrain, netClick, placePart, resizedPart, toggleDisabledHole, wireClick } from '../ui/actions';
 import { keys } from '../ui/keys';
-import { esc, marginP, renderBoard, renderDraft, renderHandles, renderPart, renderWire } from './render';
+import { esc, marginP, marginYP, renderBoard, renderDraft, renderHandles, renderPart, renderWire } from './render';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 let uidCounter = 0;
@@ -76,9 +76,10 @@ export class BoardView {
   fitCamera(): Camera {
     const b = this.store.project.board;
     const m = marginP(b) + 1.6;
+    const my = marginYP(b) + 1.6;
     const w = Math.max(this.el.clientWidth, 100);
     const h = Math.max(this.el.clientHeight, 100);
-    const zoom = Math.min(w / (b.cols - 1 + 2 * m), h / (b.rows - 1 + 2 * m + 0.8));
+    const zoom = Math.min(w / (b.cols - 1 + 2 * m), h / (b.rows - 1 + 2 * my + 0.8));
     return { cx: (b.cols - 1) / 2, cy: (b.rows - 1) / 2 + 0.2, zoom };
   }
 

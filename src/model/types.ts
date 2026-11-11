@@ -11,7 +11,10 @@ export interface Board {
   cols: number;
   rows: number;
   pitchMm: number;
+  /** 基板の端から最初の穴の中心まで（横方向。縦方向も marginYMm がなければこの値） */
   marginMm: number;
+  /** 縦方向の端の余白（省略時は marginMm と同じ） */
+  marginYMm?: number;
   type: BoardType;
   disabledHoles: Hole[];
   /** 取付穴。基板の左上の角（部品面から見て）からの位置 mm と直径 mm */
