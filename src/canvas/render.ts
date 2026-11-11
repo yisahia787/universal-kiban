@@ -92,6 +92,8 @@ function shapeSvg(shape: BodyShape, footprint: string): string {
       const r = shape.rect;
       return `<rect class="outline" x="${f(r.x0)}" y="${f(r.y0)}" width="${f(r.x1 - r.x0)}" height="${f(r.y1 - r.y0)}" rx="0.15"/>`;
     }
+    case 'button':
+      return `<circle class="btn-ring" cx="${f(shape.cx)}" cy="${f(shape.cy)}" r="${f(shape.r * 1.18)}"/><circle class="btn" cx="${f(shape.cx)}" cy="${f(shape.cy)}" r="${f(shape.r)}"/>`;
     case 'text':
       return `<text class="fp-text" x="${f(shape.x)}" y="${f(shape.y)}">${esc(shape.text)}</text>`;
     case 'multi':

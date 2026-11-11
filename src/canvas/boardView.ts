@@ -1,4 +1,4 @@
-import { getFootprint, RESIZE_MAX, RESIZE_MIN } from '../library/footprints';
+import { getFootprint, resizeRange } from '../library/footprints';
 import { holeKey, inBoard, localToTop, partGeometry, pinsAt, topToLocal, viewX } from '../logic/geometry';
 import { makePart } from '../model/project';
 import { checkGroupPlacement, checkPlacement } from '../logic/placement';
@@ -245,13 +245,14 @@ export class BoardView {
     } else if (d?.type === 'resize') {
       const pl = d.orig.placement!;
       const count0 = Number(d.orig.params.count) || 1;
+      const [min, max] = resizeRange(getFootprint(d.orig.footprint)!);
       const [lx] = topToLocal(pl, ...this.toTop(this.viewPoint(e)));
       let next: Part;
       if (d.end === 'end') {
-        const count = Math.max(RESIZE_MIN, Math.min(RESIZE_MAX, Math.round(lx) + 1));
+        const count = Math.max(min, Math.min(max, Math.round(lx) + 1));
         next = resizedPart(d.orig, count, 0);
       } else {
-        const shift = Math.max(count0 - RESIZE_MAX, Math.min(count0 - RESIZE_MIN, Math.round(lx)));
+        const shift = Math.max(count0 - max, Math.min(count0 - min, Math.round(lx)));
         next = resizedPart(d.orig, count0 - shift, shift);
       }
       store.live((p) => {
@@ -484,10 +485,10 @@ export class BoardView {
         const part = store.project.parts.find((p) => p.id === ui.selParts[0]);
         const pl = part?.placement;
         if (part && pl && pl.side === this.side && getFootprint(part.footprint)?.resizable) {
-          const count = Number(part.params.count) || 1;
-          const rows = Number(part.params.rows) === 2 ? 2 : 1;
-          const cy = (rows - 1) / 2;
-          for (const [end, lx] of [['start', -0.75], ['end', count - 0.25]] as const) {
+          // ハンドルは外形の両端のすぐ外に置く
+          const bd = partGeometry(part).bounds;
+          const cy = (bd.y0 + bd.y1) / 2;
+          for (const [end, lx] of [['start', bd.x0 - 0.25], ['end', bd.x1 + 0.25]] as const) {
             const [tx, ty] = localToTop(pl, lx, cy);
             const horiz = pl.rot === 0 || pl.rot === 180;
             s += `<rect class="resize-handle${horiz ? ' h' : ' v'}" data-resize="${end}" data-resize-part="${part.id}" x="${viewX(b, this.side, tx) - 0.22}" y="${ty - 0.4}" width="0.44" height="0.8" rx="0.12" transform="rotate(${horiz ? 0 : 90} ${viewX(b, this.side, tx)} ${ty})"/>`;
