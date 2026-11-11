@@ -33,14 +33,14 @@ export function placePart(store: Store, footprint: string, pl: Placement): boole
   });
   store.setUi({ selParts: [part.id], selWires: [], tool: 'select' });
   store.setMessage(
-    (r.warnings[0] ? `${r.warnings[0]}。` : `${part.ref} を配置しました。`) + (store.ui.placing ? '続けて配置できます（Esc で終了）' : ''),
+    (r.warnings[0] ? `${r.warnings[0]}。` : `${part.ref} を配置しました。`) + (store.ui.placing ? '続けて配置できます（Esc か基板の外をクリックで終了）' : ''),
   );
   return true;
 }
 
 export function startPlacing(store: Store, footprint: string): void {
   store.setUi({ placing: { footprint, rot: 0, side: null, hole: null }, tool: 'select', draft: null });
-  store.setMessage(`${getFootprint(footprint)?.name ?? ''} を置く穴をクリックしてください（続けて何個でも置けます。R で回転、Esc で終了）`);
+  store.setMessage(`${getFootprint(footprint)?.name ?? ''} を置く穴をクリックしてください（続けて何個でも置けます。R で回転、Esc か基板の外をクリックで終了）`);
 }
 
 /** 手元と棚の間で部品の種類を移す */
@@ -156,7 +156,7 @@ export function wireClick(store: Store, side: Side, hole: Hole, orthogonal: bool
     store.setMessage(
       kind === 'bridge'
         ? '隣の穴をクリックするとブリッジを作ります'
-        : '終点の穴をクリックすると配線を作ります（斜めも可。Shift で水平・垂直にそろえる、Esc で中止）',
+        : '終点の穴をクリックすると配線を作ります（斜めも可。Shift で水平・垂直にそろえる、Esc か基板の外をクリックで中止）',
     );
     return;
   }

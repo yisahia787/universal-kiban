@@ -9,10 +9,10 @@
   --danger: #c62828;
   --warn: #e08a00;
   --ok: #2e7d32;
-  --board-top: #e9dfc0;
-  --board-bottom: #e4d6b0;
-  --copper: #c98b45;
-  --hole: #3b3426;
+  --board-top: #eeede9;
+  --board-bottom: #e8e6e1;
+  --copper: #d6cbbb;
+  --hole: #8c8a85;
   font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
   font-size: 14px;
   color: var(--text);
@@ -637,6 +637,11 @@ details.add summary {
   padding: 2px 4px;
   border-bottom: 1px solid #f0f2f5;
 }
+.props table.pins input {
+  width: 100%;
+  padding: 1px 4px;
+  font-size: 12px;
+}
 .props table.pins th {
   color: var(--muted);
   font-weight: 600;
@@ -703,7 +708,7 @@ svg.placing {
 
 /* ---------- SVG ---------- */
 .board {
-  stroke: #b8a77a;
+  stroke: #c9c6bf;
   stroke-width: 0.06;
 }
 .board-top {
@@ -719,7 +724,12 @@ svg.placing {
   fill: var(--hole);
 }
 .hole-ring {
-  fill: #cbbd97;
+  fill: #dddbd5;
+}
+.mounting-hole {
+  fill: #fff;
+  stroke: #a9a6a0;
+  stroke-width: 0.06;
 }
 .disabled-hole path {
   stroke: #b3261e;
@@ -923,6 +933,87 @@ svg.placing {
   stroke: transparent;
   stroke-width: 0.5;
   cursor: pointer;
+}
+.part .body-xh {
+  fill: #f4f1e6;
+  stroke: #8d8778;
+}
+.part .xh-inner {
+  fill: #e4dfcf;
+  stroke: #a39d8c;
+  stroke-width: 0.03;
+}
+.part .xh-slot {
+  fill: #f4f1e6;
+}
+.part .body-esp32-devkitc {
+  fill: #1f1f1f;
+  fill-opacity: 0.9;
+  stroke: #000;
+}
+.fp-esp32-devkitc .pin {
+  fill: #050505;
+  stroke: #6b6b6b;
+}
+.fp-esp32-devkitc .pin1 {
+  stroke: #ffd54f;
+}
+.part .outline {
+  fill: rgba(30, 111, 217, 0.04);
+  stroke: #5b7fae;
+  stroke-width: 0.06;
+  stroke-dasharray: 0.3 0.18;
+}
+.part.selected .outline {
+  stroke: var(--accent);
+}
+.part.state-warn .outline {
+  stroke: var(--warn);
+}
+.part .fp-text {
+  font-size: 0.5px;
+  fill: #5b7fae;
+  text-anchor: middle;
+}
+.pin-names text {
+  font-size: 0.36px;
+  fill: #1d3d66;
+  stroke: #fff;
+  stroke-width: 0.1px;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.opposite-layer .pin-names text {
+  fill: #555;
+}
+.part .cband {
+  stroke: rgba(0, 0, 0, 0.25);
+  stroke-width: 0.015;
+}
+.pin-tip {
+  pointer-events: none;
+}
+.pin-tip rect {
+  fill: rgba(33, 37, 41, 0.92);
+}
+.pin-tip text {
+  fill: #fff;
+}
+.pin-editor {
+  position: absolute;
+  z-index: 5;
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 180px;
+}
+.pin-editor label {
+  font-size: 11px;
 }
 .resize-handle {
   fill: var(--accent);

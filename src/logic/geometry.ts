@@ -66,7 +66,7 @@ export function partGeometry(part: Part): FpGeometry {
 export function pinsAt(part: Part, pl: Placement, geo: FpGeometry = partGeometry(part)): PlacedPin[] {
   return geo.pins.map((p) => {
     const [x, y] = localToTop(pl, p.x, p.y);
-    return { partId: part.id, num: p.num, name: p.name, x: Math.round(x), y: Math.round(y) };
+    return { partId: part.id, num: p.num, name: part.pinNames?.[p.num] ?? p.name, x: Math.round(x), y: Math.round(y) };
   });
 }
 
