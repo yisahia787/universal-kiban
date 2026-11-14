@@ -13,7 +13,7 @@ function setup(): Project {
 const wire = (id: string, kind: Wire['kind'], side: Wire['side'], points: Wire['points']): Wire => ({ id, kind, side, color: '', points });
 
 describe('checkPlacement', () => {
-  it('基板外・使用禁止穴・穴の重複を検出する', () => {
+  it('基板外と使用禁止穴は置けないが、別の部品のピンと同じ穴には置ける', () => {
     const p = setup();
     const r1 = makePart(p.parts, 'resistor-axial');
     r1.placement = { side: 'top', x: 2, y: 2, rot: 0 };
@@ -21,9 +21,11 @@ describe('checkPlacement', () => {
     const r2 = makePart(p.parts, 'resistor-axial');
     expect(checkPlacement(p, r2, { side: 'top', x: 18, y: 0, rot: 0 }).ok).toBe(false);
     expect(checkPlacement(p, r2, { side: 'top', x: 15, y: 9, rot: 0 }).ok).toBe(false);
-    // はんだ面の部品でも同じ穴は使えない
-    expect(checkPlacement(p, r2, { side: 'bottom', x: 6, y: 2, rot: 0 }).ok).toBe(false);
     expect(checkPlacement(p, r2, { side: 'top', x: 2, y: 5, rot: 0 }).ok).toBe(true);
+    // 1 つの穴に 2 本のリードを挿せる（同じ面・反対面のどちらでも）
+    expect(checkPlacement(p, r2, { side: 'top', x: 2, y: 2, rot: 0 }).ok).toBe(true);
+    expect(checkPlacement(p, r2, { side: 'top', x: 6, y: 2, rot: 90 }).ok).toBe(true);
+    expect(checkPlacement(p, r2, { side: 'bottom', x: 6, y: 2, rot: 0 }).ok).toBe(true);
   });
   it('同じ面の外形の重なりは警告、反対面なら警告なし', () => {
     const p = setup();
@@ -41,6 +43,24 @@ describe('checkPlacement', () => {
 });
 
 describe('analyze nets', () => {
+  it('同じ穴に 2 本のリードを挿すと、その穴でつながる', () => {
+    const p = setup();
+    const r1 = makePart(p.parts, 'resistor-axial');
+    r1.placement = { side: 'top', x: 2, y: 2, rot: 0 }; // (2,2) (6,2)
+    p.parts.push(r1);
+    const r2 = makePart(p.parts, 'resistor-axial');
+    r2.placement = { side: 'top', x: 6, y: 2, rot: 90 }; // (6,2) (6,6) — R1 の 2 番ピンと同じ穴
+    p.parts.push(r2);
+    const a = analyze(p);
+    expect(a.badParts.size).toBe(0);
+    expect(a.issues.filter((i) => i.severity === 'error')).toHaveLength(0);
+    expect(a.netOfHole.get(holeKey(6, 2))).toBeDefined();
+    const net = a.nets.get(a.netOfHole.get(holeKey(6, 2))!)!;
+    expect(net.pins.map((x) => x.partId).sort()).toEqual([r1.id, r2.id].sort());
+    // 共有している穴のピンは「どこにも接続されていない」警告の対象にならない
+    expect(a.issues.some((i) => i.message.includes('R1.2') || i.message.includes('R2.1'))).toBe(false);
+  });
+
   it('はんだ面のすずめっき線で 2 つの部品のピンがつながる', () => {
     const p = setup();
     const r1 = makePart(p.parts, 'resistor-axial');

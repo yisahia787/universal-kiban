@@ -334,7 +334,10 @@ export class BoardView {
     const [tx, ty] = this.toTop(e.viewPoint ?? this.viewPoint(e));
     const hole: Hole = [Math.round(tx), Math.round(ty)];
     if (Math.hypot(tx - hole[0], ty - hole[1]) > 0.32) return;
-    const pin = this.store.analysis.pinsByHole.get(holeKey(hole[0], hole[1]))?.[0];
+    // 1 つの穴に複数のピンが入っているときは、この面の部品のピンを優先する
+    const pins = this.store.analysis.pinsByHole.get(holeKey(hole[0], hole[1])) ?? [];
+    const onThisSide = (id: string) => this.store.project.parts.find((p) => p.id === id)?.placement?.side === this.side;
+    const pin = pins.find((p) => onThisSide(p.partId)) ?? pins[0];
     if (pin) this.openPinEditor(pin.partId, pin.num, hole);
   }
 
