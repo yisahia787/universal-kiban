@@ -11,6 +11,8 @@ export interface PlacementResult {
 
 /**
  * 部品を指定位置に置けるか判定する（仕様書 §5.3.3）。
+ * 置けないのは、基板の外にはみ出す場合と使用禁止穴に入る場合だけ。
+ * 別の部品のピンと同じ穴に入ることは許す（1 つの穴に 2 本のリードを挿して小型化するため）。
  * ignore に含まれる部品 ID は判定から除く（移動中の部品自身など）。
  */
 export function checkPlacement(project: Project, part: Part, pl: Placement, ignore: Set<string> = new Set()): PlacementResult {
@@ -22,12 +24,6 @@ export function checkPlacement(project: Project, part: Part, pl: Placement, igno
   const pins = pinsAt(part, pl, geo);
   const disabled = new Set(b.disabledHoles.map(([x, y]) => holeKey(x, y)));
 
-  const occupied = new Map<string, string>();
-  for (const other of project.parts) {
-    if (other.id === part.id || ignore.has(other.id) || !other.placement) continue;
-    for (const p of pinsAt(other, other.placement)) occupied.set(holeKey(p.x, p.y), other.ref);
-  }
-
   for (const p of pins) {
     const lbl = `${part.ref}.${p.num}`;
     if (!inBoard(b, p.x, p.y)) {
@@ -36,8 +32,6 @@ export function checkPlacement(project: Project, part: Part, pl: Placement, igno
     }
     const k = holeKey(p.x, p.y);
     if (disabled.has(k)) errors.push(`${lbl} が使用禁止穴 ${holeLabel(p.x, p.y)} に入っています`);
-    const o = occupied.get(k);
-    if (o) errors.push(`${lbl} が ${o} のピンと同じ穴 ${holeLabel(p.x, p.y)} に入っています`);
   }
 
   const myBounds = boundsAt(pl, geo.bounds);
